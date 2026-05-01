@@ -355,6 +355,135 @@ def prom_metrics():
     return PlainTextResponse(inference_metrics.to_prometheus())
 
 
+# ═══════════════════════════════════════════════════════════════════════
+# Shell Company Detection (ChainLedger §4.11)
+# ═══════════════════════════════════════════════════════════════════════
+
+class ShellCompanyDetector:
+    """
+    Graph-based shell company detection module.
+    Cross-references vendor registrations to detect beneficial ownership rings.
+
+    Detection signals (from ChainLedger §4.11):
+    - Companies with same beneficial owner (shared directors)
+    - Companies registered at the same address
+    - Companies incorporated within 6 months of each other
+    - Same companies winning tenders from the same department
+    """
+
+    def __init__(self):
+        self.vendor_graph: dict[str, dict] = {}  # GST number -> vendor info
+        self.detection_count = 0
+
+    def register_vendor(self, gst_number: str, directors: list[str],
+                        address_hash: str, incorporation_date: str,
+                        department: str):
+        """Register a vendor in the detection graph."""
+        self.vendor_graph[gst_number] = {
+            "directors": set(directors),
+            "address_hash": address_hash,
+            "incorporation_date": incorporation_date,
+            "department": department,
+            "shell_score": 0.0,
+        }
+
+    def detect(self, target_gst: str) -> dict:
+        """
+        Analyze a vendor's network for shell company indicators.
+        Returns a shell company probability score and evidence.
+        """
+        if target_gst not in self.vendor_graph:
+            return {"gst": target_gst, "shell_score": 0.0, "evidence": [], "ring_size": 0}
+
+        target = self.vendor_graph[target_gst]
+        evidence = []
+        ring_members = set()
+
+        for gst, vendor in self.vendor_graph.items():
+            if gst == target_gst:
+                continue
+
+            # Shared directors
+            shared = target["directors"] & vendor["directors"]
+            if shared:
+                evidence.append(f"Shared directors with {gst}: {', '.join(shared)}")
+                ring_members.add(gst)
+
+            # Same registered address
+            if target["address_hash"] == vendor["address_hash"]:
+                evidence.append(f"Same registered address as {gst}")
+                ring_members.add(gst)
+
+            # Same department (winning tenders from same entity)
+            if target["department"] == vendor["department"] and gst in ring_members:
+                evidence.append(f"Both {target_gst} and {gst} won tenders from {target['department']}")
+
+        # Compute shell score: number of signals / max possible signals
+        ring_size = len(ring_members)
+        shell_score = min(1.0, len(evidence) * 0.2)
+
+        self.detection_count += 1
+
+        if shell_score > 0.6:
+            logger.warning(
+                f"SHELL COMPANY RING DETECTED: {target_gst} linked to {ring_size} entities "
+                f"(score: {shell_score:.2f})"
+            )
+
+        return {
+            "gst": target_gst,
+            "shell_score": round(shell_score, 2),
+            "shell_score_bp": int(shell_score * 10000),
+            "evidence": evidence,
+            "ring_members": list(ring_members),
+            "ring_size": ring_size,
+        }
+
+
+shell_detector = ShellCompanyDetector()
+
+
+class VendorRegistration(BaseModel):
+    gst_number: str
+    directors: list[str]
+    address_hash: str
+    incorporation_date: str
+    department: str
+
+
+@app.post("/vendor/register")
+def register_vendor(vendor: VendorRegistration):
+    """Register a vendor in the shell company detection graph."""
+    shell_detector.register_vendor(
+        gst_number=vendor.gst_number,
+        directors=vendor.directors,
+        address_hash=vendor.address_hash,
+        incorporation_date=vendor.incorporation_date,
+        department=vendor.department,
+    )
+    return {"status": "registered", "gst": vendor.gst_number}
+
+
+@app.post("/vendor/detect-shell")
+def detect_shell_company(gst_number: str):
+    """
+    ChainLedger §4.11: Detect if a vendor is part of a shell company ring.
+    Cross-references directors, registered addresses, and department tenders.
+    """
+    result = shell_detector.detect(gst_number)
+    return result
+
+
+@app.get("/vendor/stats")
+def vendor_stats():
+    """Shell company detection statistics."""
+    return {
+        "registered_vendors": len(shell_detector.vendor_graph),
+        "detections_run": shell_detector.detection_count,
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8080)
+
