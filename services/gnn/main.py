@@ -17,7 +17,7 @@ import numpy as np
 import torch
 import torch_geometric.nn as pyg_nn
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import PlainTextResponse
@@ -143,7 +143,6 @@ class DriftDetector:
 
         # Simplified PSI using mean/std shift
         cur_mean = current.mean(axis=0)
-        cur_std = current.std(axis=0)
 
         # Normalized mean shift
         safe_std = np.where(ref_std > 1e-6, ref_std, 1.0)

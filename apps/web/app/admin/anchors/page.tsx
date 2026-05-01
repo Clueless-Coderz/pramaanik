@@ -301,7 +301,7 @@ function MerkleVerifier() {
       <div>
         <h3 className="label-xs mb-1">Merkle Inclusion Verifier</h3>
         <p className="text-[12px] leading-relaxed" style={{ color: "var(--muted)" }}>
-          Verify an entity ID's cryptographic path against the most recent on-chain roots.
+          Verify an entity ID&apos;s cryptographic path against the most recent on-chain roots.
         </p>
       </div>
 

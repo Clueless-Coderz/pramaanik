@@ -202,7 +202,7 @@ export default function CitizenLayout({ children }: { children: ReactNode }) {
   // Close drawer on route change
   useEffect(() => {
     if (drawerOpen) {
-      setDrawerOpen(false);
+      setTimeout(() => setDrawerOpen(false), 0);
     }
   }, [pathname, drawerOpen]);
 

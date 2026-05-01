@@ -10,7 +10,6 @@ import json
 import time
 import hashlib
 import logging
-import asyncio
 import threading
 import uuid
 from enum import Enum

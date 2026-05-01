@@ -447,7 +447,7 @@ contract SeedDemoScript is Script {
             "Installment-19 not credited. Aadhaar-bank seeding done on 12-Mar-2025 at CSC "
             "Sikar. PFMS shows 'Pending at State'. Contact: 9414XXXXXX. "
             "Reference: CPGRAMS/2025/DAKL/100234.",
-            FundFlow.GovLevel.State
+            "ipfs://evidence_pmkisan"
         );
 
         // MGNREGA: wages overdue beyond the 15-day statutory limit (Section 3(3))
@@ -457,7 +457,7 @@ contract SeedDemoScript is Script {
             "Job Card No. BR-02-005-001-000/1234. Work completed 01-Apr-2025 to 14-Apr-2025 "
             "(Muster Roll No. MR/BR/AUR/2025/04/0087). Wages not credited as of 02-May-2025. "
             "Section 3(3) MIS delay: 18 days. Compensation claim pending.",
-            FundFlow.GovLevel.District
+            "ipfs://evidence_mgnrega"
         );
 
         // PMAY-G: quality complaint — JE certified completion without site visit
@@ -467,7 +467,7 @@ contract SeedDemoScript is Script {
             "House ID: OD-16-KRP-2025-001. Foundation complete but wall cracks visible within "
             "15 days. JE Suresh Nayak certified completion without site visit per AwaasSoft. "
             "Request geo-tagged photo re-verification under PMAY-G monitoring framework.",
-            FundFlow.GovLevel.District
+            "ipfs://evidence_pmayg"
         );
 
         console.log("3 grievances filed (PM-KISAN delay, MGNREGA overdue wages, PMAY-G quality)");
