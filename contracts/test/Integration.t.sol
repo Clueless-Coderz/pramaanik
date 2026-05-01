@@ -63,8 +63,10 @@ contract IntegrationTest is Test {
         grievance.grantRole(grievance.AUDITOR_ROLE(), auditor);
 
         anchor.grantRole(anchor.ANCHOR_ROLE(), admin);
-
         batchVerifier.grantRole(batchVerifier.PROVER_ROLE(), prover);
+
+        // Grant FundFlow permission to record disbursements in Registry (Budget Enforcement)
+        registry.grantRole(registry.ADMIN_ROLE(), address(fundFlow));
 
         // ─── Register Scheme ─────────────────────────────────────────
         schemeId = registry.registerScheme(

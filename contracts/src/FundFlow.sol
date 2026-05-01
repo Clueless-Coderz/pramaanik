@@ -210,6 +210,14 @@ contract FundFlow is AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardU
         totalDisbursementCount++;
         oracleAttestations[attestationHash] = true;
 
+        // Sync with SchemeRegistry to enforce budget limits (ChainLedger §4.2)
+        if (schemeRegistry != address(0)) {
+            (bool success, ) = schemeRegistry.call(
+                abi.encodeWithSignature("recordDisbursement(bytes32,uint256)", _schemeId, _amount)
+            );
+            if (!success) revert OracleCheckFailed("Budget enforcement failed or scheme inactive");
+        }
+
         // First approval from creator
         if (needsMultiSig) {
             approvals[disbursementId][msg.sender] = true;

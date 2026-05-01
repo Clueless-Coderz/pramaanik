@@ -39,6 +39,19 @@ contract DeployScript is Script {
 
         // Link Oracle ↔ FundFlow
         oracle.setFundFlowContract(address(fundFlow));
+        
+        // Grant permissions for automatic flagging
+        bytes32 ORACLE_ROLE = keccak256("ORACLE_ROLE");
+        fundFlow.grantRole(ORACLE_ROLE, address(oracle));
+        fundFlow.grantRole(ORACLE_ROLE, admin);
+        
+        // Grant FundFlow permission to record disbursements in Registry
+        bytes32 ADMIN_ROLE = keccak256("ADMIN_ROLE");
+        registry.grantRole(ADMIN_ROLE, address(fundFlow));
+        
+        // Grant PROVER_ROLE to admin for zkML worker submission
+        bytes32 PROVER_ROLE = keccak256("PROVER_ROLE");
+        oracle.grantRole(PROVER_ROLE, admin);
 
         // ─── 5. Anchor (dual-chain Merkle root checkpointing) ────────────
         Anchor anchor = new Anchor();
@@ -55,6 +68,9 @@ contract DeployScript is Script {
         // ─── 8. ConstitutionalCompliance (Article 275/282, Auto-FIR) ─────
         ConstitutionalCompliance compliance = new ConstitutionalCompliance();
         compliance.initialize(admin);
+
+        // Grant PROVER_ROLE to admin on BatchVerifier
+        batchVerifier.grantRole(PROVER_ROLE, admin);
 
         vm.stopBroadcast();
 
