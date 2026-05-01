@@ -237,8 +237,9 @@ app.post("/oracle/gst", async (req, res) => {
   const fallback = { valid: false, status: "CIRCUIT_OPEN_FALLBACK" };
   const { result, fromFallback } = await withRetry("gstn", () => queryGSTN(gstin), fallback);
 
+  // Deterministic attestation hash — no Date.now() so on-chain re-verification is possible
   const attestationHash = ethers.keccak256(
-    ethers.toUtf8Bytes(`gst:${gstin}:${result.valid}:${Date.now()}`)
+    ethers.toUtf8Bytes(`gst:${gstin}:${result.valid}`)
   );
 
   res.json({
@@ -259,8 +260,9 @@ app.post("/oracle/bank-dedup", async (req, res) => {
   const fallback = { isUnique: false, linkedCount: -1 }; // safe default: flag as non-unique
   const { result, fromFallback } = await withRetry("npci", () => queryNPCI(accountNumber), fallback);
 
+  // Deterministic attestation hash — no Date.now()
   const attestationHash = ethers.keccak256(
-    ethers.toUtf8Bytes(`bank:${accountNumber}:${result.isUnique}:${Date.now()}`)
+    ethers.toUtf8Bytes(`bank:${accountNumber}:${result.isUnique}`)
   );
 
   res.json({
@@ -285,8 +287,9 @@ app.post("/oracle/geotag", async (req, res) => {
     fallback
   );
 
+  // Deterministic attestation hash — no Date.now()
   const attestationHash = ethers.keccak256(
-    ethers.toUtf8Bytes(`geo:${photoHash}:${result.verified}:${Date.now()}`)
+    ethers.toUtf8Bytes(`geo:${photoHash}:${result.verified}`)
   );
 
   res.json({

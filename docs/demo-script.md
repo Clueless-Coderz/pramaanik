@@ -64,14 +64,21 @@ forge script script/SeedDemo.s.sol --broadcast --rpc-url http://localhost:8545
    > to approve. A single corrupt official cannot move large amounts."
 2. **Second admin approves** → Now the transaction can advance
 
-### Act 5: Constitutional Compliance (30 seconds)
+### Act 5: The Farmer Who Can't Type (1 minute) — ACCESSIBILITY & PRIVACY
+
+> "Meet Ramu. He's 67, has no smartphone, and doesn't know what Web3 is. He walks into his local Common Service Centre (CSC) because his MGNREGA wages haven't arrived.
+> The CSC agent types his complaint and asks Ramu to scan his fingerprint.
+> The system generates a Zero-Knowledge nullifier hash from his biometric. The complaint is filed on-chain, and the agent pays the gas fee via a Paymaster. 
+> Result? Ramu's complaint is permanently recorded on the blockchain, but his identity remains 100% anonymous and protected under the DPDP Act. No one can retaliate against him."
+
+### Act 6: Constitutional Compliance (30 seconds)
 
 > "If a CRITICAL fraud remains unresolved for 72 hours, the system automatically generates
 > an FIR draft with IPC sections 409 and 420, digitally signed with the block hash as
 > IT Act Section 65B certified evidence. It's auto-submitted to the e-FIR portal and
 > the Lokpal receives a real-time feed."
 
-### Act 6: Why Blockchain? (30 seconds)
+### Act 7: Why Blockchain? (30 seconds)
 
 > "Why not just a database? Three reasons:
 > 1. **Permanent evidence** — once recorded, no admin can delete a transaction

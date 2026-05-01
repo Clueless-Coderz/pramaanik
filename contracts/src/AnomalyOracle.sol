@@ -127,6 +127,7 @@ contract AnomalyOracle is AccessControlUpgradeable, UUPSUpgradeable {
         bytes calldata _proof,
         string calldata _explanation
     ) external onlyRole(PROVER_ROLE) {
+        if (verifierContract == address(0)) revert VerifierNotSet();
         if (!currentModel.active) revert NoActiveModel();
         if (_riskScore > 10000) revert InvalidRiskScore(_riskScore);
 
@@ -176,7 +177,9 @@ contract AnomalyOracle is AccessControlUpgradeable, UUPSUpgradeable {
     // ─── Admin ───────────────────────────────────────────────────────────
 
     /// @notice Update the EZKL verifier contract address.
+    /// @dev Requires non-zero address — mock mode no longer permitted.
     function setVerifier(address _newVerifier) external onlyRole(ADMIN_ROLE) {
+        require(_newVerifier != address(0), "Verifier address cannot be zero");
         address old = verifierContract;
         verifierContract = _newVerifier;
         emit VerifierUpdated(old, _newVerifier);
@@ -211,13 +214,11 @@ contract AnomalyOracle is AccessControlUpgradeable, UUPSUpgradeable {
     // ─── Internal Verification ───────────────────────────────────────────
 
     /// @dev Calls the EZKL-generated verifier contract.
-    ///      In the hackathon demo, if no verifier is deployed, returns true (mock mode).
+    ///      Mock mode has been removed — a real Halo2 verifier must be deployed.
     ///      Production: verifierContract.verify(proof) must return true.
     function _verifyProof(bytes calldata _proof) internal view returns (bool) {
-        if (verifierContract == address(0)) {
-            // Mock mode for demo — always passes
-            return true;
-        }
+        // No mock mode — verifier must be set (enforced in submitPrediction)
+        assert(verifierContract != address(0));
 
         // Call the EZKL Halo2 verifier's verify function
         (bool success, bytes memory result) = verifierContract.staticcall(

@@ -122,6 +122,7 @@ contract FundFlow is AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardU
     );
 
     event DisbursementFrozen(bytes32 indexed disbursementId, address indexed frozenBy);
+    event DisbursementUnfrozen(bytes32 indexed disbursementId, address indexed unfrozenBy, string reason);
     event OracleAttestationRecorded(bytes32 indexed attestationHash, bytes32 indexed disbursementId);
     event MultiSigApproval(bytes32 indexed disbursementId, address indexed approver, uint8 approvalCount);
     event UtilizationCertSubmitted(bytes32 indexed disbursementId, bytes32 certHash);
@@ -134,6 +135,7 @@ contract FundFlow is AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardU
     error InvalidStageTransition(FlowStage current, FlowStage requested);
     error OracleCheckFailed(string check);
     error DisbursementFrozenError(bytes32 id);
+    error InvalidGovLevelFlow(GovLevel sender, GovLevel receiver);
 
     // ─── Initializer ─────────────────────────────────────────────────────
     function initialize(
@@ -167,9 +169,13 @@ contract FundFlow is AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardU
         string calldata _ipfsCid,
         bool _gstValid,
         bool _bankUnique,
-        bool _geotagVerified
+        bool _geotagVerified,
+        GovLevel _senderLevel,
+        GovLevel _receiverLevel
     ) external onlyRole(ADMIN_ROLE) nonReentrant returns (bytes32 disbursementId) {
         if (_amount == 0) revert InvalidAmount();
+        // Funds must flow downward: receiver level must be strictly below sender
+        if (uint8(_receiverLevel) <= uint8(_senderLevel)) revert InvalidGovLevelFlow(_senderLevel, _receiverLevel);
 
         // Generate unique disbursement ID
         disbursementId = keccak256(
@@ -199,8 +205,8 @@ contract FundFlow is AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardU
             gstValid: _gstValid,
             bankUnique: _bankUnique,
             geotagVerified: _geotagVerified,
-            senderLevel: GovLevel.Central,
-            receiverLevel: GovLevel.State,
+            senderLevel: _senderLevel,
+            receiverLevel: _receiverLevel,
             multiSigRequired: needsMultiSig,
             approvalCount: needsMultiSig ? 0 : MULTISIG_REQUIRED_APPROVALS, // auto-approved if below threshold
             utilizationCertHash: bytes32(0)
@@ -218,11 +224,10 @@ contract FundFlow is AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardU
             if (!success) revert OracleCheckFailed("Budget enforcement failed or scheme inactive");
         }
 
-        // First approval from creator
+        // Multi-sig: do NOT auto-count creator as first approval.
+        // All approvals must come via explicit approveMultiSig() calls.
         if (needsMultiSig) {
-            approvals[disbursementId][msg.sender] = true;
-            disbursements[disbursementId].approvalCount = 1;
-            emit MultiSigApproval(disbursementId, msg.sender, 1);
+            emit MultiSigApproval(disbursementId, msg.sender, 0);
         }
 
         emit DisbursementCreated(disbursementId, _schemeId, _stage, msg.sender, _toPseudonymDid, _amount);
@@ -245,13 +250,14 @@ contract FundFlow is AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardU
     }
 
     /// @notice Advance a disbursement to the next stage in the fund flow.
+    /// @dev Uses a strict stage transition matrix — no stage skipping allowed.
     function advanceStage(bytes32 _disbursementId, FlowStage _newStage)
         external
         onlyRole(ADMIN_ROLE)
     {
         Disbursement storage d = _getDisbursement(_disbursementId);
         if (d.stage == FlowStage.Frozen) revert DisbursementFrozenError(_disbursementId);
-        if (uint8(_newStage) <= uint8(d.stage)) revert InvalidStageTransition(d.stage, _newStage);
+        if (!_isValidTransition(d.stage, _newStage)) revert InvalidStageTransition(d.stage, _newStage);
 
         // Multi-sig gate: high-value transactions cannot advance without full approval
         if (d.multiSigRequired && d.approvalCount < MULTISIG_REQUIRED_APPROVALS) {
@@ -264,6 +270,28 @@ contract FundFlow is AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardU
         emit DisbursementStageAdvanced(_disbursementId, old, _newStage);
     }
 
+    /// @dev Stage transition matrix — only allows sequential forward transitions.
+    ///      Includes shortcuts for India-specific welfare disbursement patterns.
+    function _isValidTransition(FlowStage _from, FlowStage _to) internal pure returns (bool) {
+        // Standard sequential path: Sanctioned → State → Agency → Vendor → Beneficiary → WorkCompleted
+        if (_from == FlowStage.Sanctioned && _to == FlowStage.ReleasedToState) return true;
+        if (_from == FlowStage.ReleasedToState && _to == FlowStage.ReleasedToAgency) return true;
+        if (_from == FlowStage.ReleasedToAgency && _to == FlowStage.ReleasedToVendor) return true;
+        if (_from == FlowStage.ReleasedToVendor && _to == FlowStage.ReleasedToBeneficiary) return true;
+        if (_from == FlowStage.ReleasedToBeneficiary && _to == FlowStage.WorkCompleted) return true;
+        // Shortcut: Sanctioned → Agency (state-level schemes, no central release)
+        if (_from == FlowStage.Sanctioned && _to == FlowStage.ReleasedToAgency) return true;
+        // Shortcut: Sanctioned → Beneficiary (direct benefit transfer, e.g. PM-KISAN)
+        if (_from == FlowStage.Sanctioned && _to == FlowStage.ReleasedToBeneficiary) return true;
+        // Shortcut: Agency → Beneficiary (no vendor intermediary, e.g. wage payments)
+        if (_from == FlowStage.ReleasedToAgency && _to == FlowStage.ReleasedToBeneficiary) return true;
+        // Shortcut: State → Beneficiary (state-direct DBT, e.g. PM-KISAN state release)
+        if (_from == FlowStage.ReleasedToState && _to == FlowStage.ReleasedToBeneficiary) return true;
+        // Shortcut: State → Vendor (state-level procurement without agency)
+        if (_from == FlowStage.ReleasedToState && _to == FlowStage.ReleasedToVendor) return true;
+        return false;
+    }
+
     // ─── Utilization Certificate (ChainLedger §4.2.3) ───────────────────
 
     /// @notice Submit a utilization certificate hash for a disbursement.
@@ -272,6 +300,8 @@ contract FundFlow is AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardU
         external onlyRole(ADMIN_ROLE)
     {
         Disbursement storage d = _getDisbursement(_disbursementId);
+        if (d.stage == FlowStage.Frozen) revert DisbursementFrozenError(_disbursementId);
+        if (d.stage == FlowStage.Flagged) revert DisbursementFrozenError(_disbursementId);
         d.utilizationCertHash = _certHash;
         d.stage = FlowStage.UtilCertPending;
         emit UtilizationCertSubmitted(_disbursementId, _certHash);
@@ -282,6 +312,7 @@ contract FundFlow is AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardU
         external onlyRole(AUDITOR_ROLE)
     {
         Disbursement storage d = _getDisbursement(_disbursementId);
+        if (d.stage == FlowStage.Frozen) revert DisbursementFrozenError(_disbursementId);
         require(d.utilizationCertHash != bytes32(0), "No cert submitted");
         d.stage = FlowStage.UtilCertVerified;
         emit UtilizationCertVerified(_disbursementId, msg.sender);
@@ -325,6 +356,18 @@ contract FundFlow is AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardU
         Disbursement storage d = _getDisbursement(_disbursementId);
         d.stage = FlowStage.Frozen;
         emit DisbursementFrozen(_disbursementId, msg.sender);
+    }
+
+    /// @notice Unfreeze a frozen disbursement (Auditor privilege — returns to Flagged for re-review).
+    /// @param _reason Justification string (emitted in event for audit trail).
+    function unfreezeDisbursement(bytes32 _disbursementId, string calldata _reason)
+        external
+        onlyRole(AUDITOR_ROLE)
+    {
+        Disbursement storage d = _getDisbursement(_disbursementId);
+        require(d.stage == FlowStage.Frozen, "Not frozen");
+        d.stage = FlowStage.Flagged;
+        emit DisbursementUnfrozen(_disbursementId, msg.sender, _reason);
     }
 
     // ─── Views ───────────────────────────────────────────────────────────

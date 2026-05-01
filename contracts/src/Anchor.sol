@@ -35,6 +35,8 @@ contract Anchor is AccessControlUpgradeable, UUPSUpgradeable {
     // Anchoring status tracking (set by the anchor-publisher service)
     mapping(uint256 => bytes32) public polygonAnchors;   // sequenceNumber => polygon tx hash
     mapping(uint256 => bytes32) public sepoliaAnchors;   // sequenceNumber => sepolia tx hash
+    // Root validation: tracks all checkpointed Merkle roots
+    mapping(bytes32 => bool) public isCheckpointRoot;
 
     // ─── Events ──────────────────────────────────────────────────────────
     event CheckpointCreated(
@@ -54,6 +56,7 @@ contract Anchor is AccessControlUpgradeable, UUPSUpgradeable {
     // ─── Errors ──────────────────────────────────────────────────────────
     error InvalidMerkleRoot();
     error CheckpointNotFound(uint256 sequenceNumber);
+    error RootNotCheckpointed(bytes32 root);
 
     // ─── Initializer ─────────────────────────────────────────────────────
     function initialize(address _admin) external initializer {
@@ -94,6 +97,7 @@ contract Anchor is AccessControlUpgradeable, UUPSUpgradeable {
         }));
 
         latestMerkleRoot = _merkleRoot;
+        isCheckpointRoot[_merkleRoot] = true;
         checkpointCount++;
 
         emit CheckpointCreated(sequenceNumber, _merkleRoot, _disbursementCount, block.number, uint64(block.timestamp));
@@ -137,12 +141,13 @@ contract Anchor is AccessControlUpgradeable, UUPSUpgradeable {
     /// @notice Verify a Merkle proof for a specific disbursement hash against a checkpoint.
     /// @param _leaf The hash of the disbursement to verify.
     /// @param _proof The Merkle proof (array of sibling hashes).
-    /// @param _root The Merkle root to verify against.
+    /// @param _root The Merkle root to verify against. Must be a previously checkpointed root.
     function verifyInclusion(
         bytes32 _leaf,
         bytes32[] calldata _proof,
         bytes32 _root
-    ) external pure returns (bool) {
+    ) external view returns (bool) {
+        if (!isCheckpointRoot[_root]) revert RootNotCheckpointed(_root);
         bytes32 computedHash = _leaf;
         for (uint256 i = 0; i < _proof.length; i++) {
             bytes32 proofElement = _proof[i];

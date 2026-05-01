@@ -131,6 +131,16 @@ OFF-CHAIN (encrypted):
 | EZKL prover | `:8081/metrics` | Queue depth > 50, SLA breaches |
 | Oracle relayer | `:8082/metrics` | Circuit breaker open |
 
+## 8. Future Integration (Post-Hackathon)
+
+While the current architecture proves the viability of on-chain fund tracking and zkML fraud detection, a production deployment at national scale will require deep integration with existing India Stack infrastructure:
+
+**1. DigiLocker & e-Pramaan Integration**
+Utilization certificates (UCs) are currently stored on IPFS and referenced via hash. Future versions will integrate directly with **DigiLocker** via the e-Pramaan gateway. When a vendor completes a project, the digitally signed UC will be pulled directly from their verified DigiLocker account, cryptographically hashed, and anchored to the `FundFlow` contract. This ensures that the document's provenance is guaranteed by the government's official credential repository, eliminating forged PDF uploads entirely.
+
+**2. NATGRID & Real-Time Intelligence**
+The GNN (Graph Neural Network) shell-company detection currently relies on mock vendor registry data. For a production launch, the system's off-chain oracle layer will interface securely with **NATGRID** (National Intelligence Grid). By cross-referencing on-chain vendor transaction clusters with NATGRID's financial intelligence feeds (CBDT, FIU), the RGCN model will gain real-time access to actual tax evasion profiles and PEP (Politically Exposed Persons) databases. This will elevate the anomaly detection from "suspicious pattern matching" to deterministic, intelligence-backed fraud prevention.
+
 ## Deployment Targets
 
 | Environment | Chain | Purpose |

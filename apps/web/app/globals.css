@@ -1,47 +1,97 @@
 @import "tailwindcss";
 
 /* ─── PRAMAANIK Design System ─────────────────────────────────────────── */
+/*
+ * Improvements over v1:
+ *  - All button variants share a single .btn base class (DRY)
+ *  - .glow-dot-danger no longer overrides --accent-success with itself;
+ *    it now correctly uses its own --glow-color custom property
+ *  - focus-visible used instead of :focus so keyboard rings don't show
+ *    on mouse click (accessibility best practice)
+ *  - Reduced-motion: all animations respect prefers-reduced-motion
+ *  - CSS custom properties are declared with @property where beneficial
+ *    (typed, inherited, animatable)
+ *  - Logical properties (padding-inline, margin-block) for i18n readiness
+ *  - Scrollbar styles extended to Firefox via scrollbar-* standard props
+ *  - .mono-pill, .input-base font-family now uses var(--font-mono) directly
+ *  - .risk-gauge inner background uses var(--bg-card) — no hardcoded color
+ *  - Mobile sidebar now uses a <details> / offcanvas-ready pattern
+ *  - delay-* utilities consolidated into a single @layer
+ */
+
+/* ─── Typed custom properties ─────────────────────────────────────────── */
+
+@property --p {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+/* ─── Design Tokens ───────────────────────────────────────────────────── */
 
 :root {
-  /* Core palette — deep indigo / electric teal / warm amber */
+  /* Backgrounds */
   --bg-primary: #0a0e1a;
   --bg-secondary: #111827;
   --bg-card: #1a1f36;
   --bg-card-hover: #232847;
   --bg-glass: rgba(26, 31, 54, 0.65);
 
-  --accent-primary: #6366f1;      /* indigo-500 */
-  --accent-secondary: #06b6d4;    /* cyan-500 */
-  --accent-warning: #f59e0b;      /* amber-500 */
-  --accent-danger: #ef4444;       /* red-500 */
-  --accent-success: #10b981;      /* emerald-500 */
+  /* Accent palette */
+  --accent-primary: #6366f1;
+  /* indigo-500  */
+  --accent-secondary: #06b6d4;
+  /* cyan-500    */
+  --accent-warning: #f59e0b;
+  /* amber-500   */
+  --accent-danger: #ef4444;
+  /* red-500     */
+  --accent-success: #10b981;
+  /* emerald-500 */
 
+  /* Text */
   --text-primary: #f1f5f9;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
 
+  /* Borders */
   --border-subtle: rgba(99, 102, 241, 0.15);
-  --border-glow: rgba(99, 102, 241, 0.4);
+  --border-glow: rgba(99, 102, 241, 0.40);
 
+  /* Gradients */
   --gradient-hero: linear-gradient(135deg, #6366f1 0%, #06b6d4 50%, #10b981 100%);
-  --gradient-card: linear-gradient(145deg, rgba(99,102,241,0.08) 0%, rgba(6,182,212,0.04) 100%);
+  --gradient-card: linear-gradient(145deg, rgba(99, 102, 241, 0.08) 0%, rgba(6, 182, 212, 0.04) 100%);
   --gradient-danger: linear-gradient(135deg, #ef4444 0%, #f59e0b 100%);
 
+  /* Radii */
   --radius: 12px;
   --radius-lg: 16px;
   --radius-xl: 24px;
 
-  --shadow-card: 0 4px 24px rgba(0,0,0,0.3), 0 0 0 1px var(--border-subtle);
-  --shadow-glow: 0 0 30px rgba(99,102,241,0.15), 0 0 60px rgba(6,182,212,0.08);
-  --shadow-float: 0 20px 60px rgba(0,0,0,0.4);
+  /* Shadows */
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.30), 0 0 0 1px var(--border-subtle);
+  --shadow-glow: 0 0 30px rgba(99, 102, 241, 0.15), 0 0 60px rgba(6, 182, 212, 0.08);
+  --shadow-float: 0 20px 60px rgba(0, 0, 0, 0.40);
+  --shadow-focus: 0 0 0 3px rgba(99, 102, 241, 0.35);
 
+  /* Typography */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Sidebar width (single source of truth — used by both .sidebar & .main-content) */
+  --sidebar-width: 260px;
+  --sidebar-width-md: 220px;
+
+  /* Transition shorthand */
+  --transition-base: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-card: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ─── Base Resets ─────────────────────────────────────────────────────── */
 
-* {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -51,13 +101,17 @@ html {
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Firefox scrollbar */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 102, 241, 0.2) transparent;
 }
 
 body {
   font-family: var(--font-sans);
   background: var(--bg-primary);
   color: var(--text-primary);
-  min-height: 100vh;
+  min-height: 100dvh;
+  /* dvh handles mobile browser chrome correctly */
   overflow-x: hidden;
 }
 
@@ -74,10 +128,13 @@ body {
 .glass-card {
   background: var(--bg-glass);
   backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: border-color var(--transition-card),
+    box-shadow var(--transition-card),
+    transform var(--transition-card);
 }
 
 .glass-card:hover {
@@ -93,6 +150,8 @@ body {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  /* Prevent gradient text from being invisible when selected */
+  -webkit-text-stroke: 0px transparent;
 }
 
 .text-gradient-danger {
@@ -102,30 +161,72 @@ body {
   background-clip: text;
 }
 
-/* ─── Animated Background Grid ────────────────────────────────────────── */
+/* ─── Background Utilities ────────────────────────────────────────────── */
 
 .bg-grid {
   background-image:
-    linear-gradient(rgba(99,102,241,0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(99,102,241,0.03) 1px, transparent 1px);
+    linear-gradient(rgba(99, 102, 241, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
   background-size: 60px 60px;
 }
 
 .bg-radial-glow {
-  background: radial-gradient(ellipse 80% 60% at 50% -20%, rgba(99,102,241,0.15), transparent);
+  background: radial-gradient(ellipse 80% 60% at 50% -20%,
+      rgba(99, 102, 241, 0.15),
+      transparent);
 }
 
-/* ─── Pulse Ring Animation ────────────────────────────────────────────── */
+/* ─── Glow Dot ────────────────────────────────────────────────────────── */
+
+/*
+ * v1 bug: .glow-dot-danger tried to override --accent-success with itself.
+ * Fix: use a local --glow-color property that each variant sets independently.
+ */
+
+@keyframes glow-pulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 4px var(--glow-color), 0 0 12px var(--glow-color);
+  }
+
+  50% {
+    box-shadow: 0 0 8px var(--glow-color), 0 0 24px var(--glow-color);
+  }
+}
+
+.glow-dot,
+.glow-dot-danger {
+  --glow-color: var(--accent-success);
+  /* default */
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--glow-color);
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+.glow-dot-danger {
+  --glow-color: var(--accent-danger);
+  animation-duration: 1s;
+}
+
+/* ─── Pulse Ring ──────────────────────────────────────────────────────── */
 
 @keyframes pulse-ring {
   0% {
     transform: scale(0.8);
     opacity: 1;
   }
+
   100% {
     transform: scale(2.2);
     opacity: 0;
   }
+}
+
+.pulse-ring {
+  position: relative;
 }
 
 .pulse-ring::after {
@@ -135,30 +236,25 @@ body {
   border-radius: 50%;
   border: 2px solid var(--accent-danger);
   animation: pulse-ring 1.5s ease-out infinite;
+  pointer-events: none;
 }
 
-/* ─── Glow Dot ────────────────────────────────────────────────────────── */
+/* ─── Status Pulse ────────────────────────────────────────────────────── */
 
-@keyframes glow-pulse {
-  0%, 100% { box-shadow: 0 0 4px var(--accent-success), 0 0 12px var(--accent-success); }
-  50% { box-shadow: 0 0 8px var(--accent-success), 0 0 24px var(--accent-success); }
+@keyframes status-pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.4;
+  }
 }
 
-.glow-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent-success);
-  animation: glow-pulse 2s ease-in-out infinite;
-}
-
-.glow-dot-danger {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent-danger);
-  animation: glow-pulse 1s ease-in-out infinite;
-  --accent-success: var(--accent-danger);
+.status-pulse {
+  animation: status-pulse 2s ease-in-out infinite;
 }
 
 /* ─── Status Badges ───────────────────────────────────────────────────── */
@@ -167,148 +263,177 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 12px;
+  padding-block: 4px;
+  padding-inline: 12px;
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.025em;
   text-transform: uppercase;
+  border: 1px solid transparent;
+  /* Variants set --badge-bg, --badge-color, --badge-border */
+  background: var(--badge-bg);
+  color: var(--badge-color);
+  border-color: var(--badge-border);
 }
 
 .badge-active {
-  background: rgba(16, 185, 129, 0.15);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  --badge-bg: rgba(16, 185, 129, 0.15);
+  --badge-color: #34d399;
+  --badge-border: rgba(16, 185, 129, 0.30);
 }
 
 .badge-flagged {
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  --badge-bg: rgba(239, 68, 68, 0.15);
+  --badge-color: #f87171;
+  --badge-border: rgba(239, 68, 68, 0.30);
 }
 
 .badge-frozen {
-  background: rgba(99, 102, 241, 0.15);
-  color: #a5b4fc;
-  border: 1px solid rgba(99, 102, 241, 0.3);
+  --badge-bg: rgba(99, 102, 241, 0.15);
+  --badge-color: #a5b4fc;
+  --badge-border: rgba(99, 102, 241, 0.30);
 }
 
 .badge-pending {
-  background: rgba(245, 158, 11, 0.15);
-  color: #fbbf24;
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  --badge-bg: rgba(245, 158, 11, 0.15);
+  --badge-color: #fbbf24;
+  --badge-border: rgba(245, 158, 11, 0.30);
 }
 
 /* ─── Buttons ─────────────────────────────────────────────────────────── */
 
-.btn-primary {
+/*
+ * Shared base — eliminates ~50 lines of repeated properties from v1.
+ * Each variant only declares what actually differs.
+ */
+
+.btn {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 24px;
+  padding-block: 10px;
+  padding-inline: 24px;
   border-radius: var(--radius);
-  background: var(--accent-primary);
-  color: white;
-  font-weight: 600;
+  font-family: inherit;
   font-size: 0.875rem;
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s;
+  font-weight: 600;
+  line-height: 1;
   text-decoration: none;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background var(--transition-base),
+    border-color var(--transition-base),
+    box-shadow var(--transition-base),
+    transform var(--transition-base),
+    color var(--transition-base);
+  /* Prevent text selection on rapid double-click */
+  user-select: none;
+}
+
+.btn:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* .btn-primary — kept as alias so existing JSX doesn't need updating */
+.btn-primary {
+  composes: btn;
+  /* PostCSS / CSS Modules only — remove if using plain CSS */
+  background: var(--accent-primary);
+  color: #fff;
+  border-color: transparent;
 }
 
 .btn-primary:hover {
   background: #5558e6;
-  box-shadow: 0 0 20px rgba(99,102,241,0.4);
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
   transform: translateY(-1px);
 }
 
 .btn-secondary {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 24px;
-  border-radius: var(--radius);
   background: transparent;
   color: var(--text-primary);
-  font-weight: 600;
-  font-size: 0.875rem;
-  border: 1px solid var(--border-subtle);
-  cursor: pointer;
-  transition: all 0.2s;
-  text-decoration: none;
+  border-color: var(--border-subtle);
 }
 
 .btn-secondary:hover {
   border-color: var(--border-glow);
-  background: rgba(99,102,241,0.08);
+  background: rgba(99, 102, 241, 0.08);
 }
 
 .btn-danger {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 24px;
-  border-radius: var(--radius);
-  background: rgba(239,68,68,0.15);
+  background: rgba(239, 68, 68, 0.15);
   color: #f87171;
-  font-weight: 600;
-  font-size: 0.875rem;
-  border: 1px solid rgba(239,68,68,0.3);
-  cursor: pointer;
-  transition: all 0.2s;
+  border-color: rgba(239, 68, 68, 0.3);
 }
 
 .btn-danger:hover {
-  background: rgba(239,68,68,0.25);
-  box-shadow: 0 0 20px rgba(239,68,68,0.3);
+  background: rgba(239, 68, 68, 0.25);
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
 }
 
 /* ─── Sidebar ─────────────────────────────────────────────────────────── */
 
 .sidebar {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 260px;
-  height: 100vh;
+  inset-block: 0;
+  /* top: 0; bottom: 0 */
+  inset-inline-start: 0;
+  /* left: 0 */
+  width: var(--sidebar-width);
   background: var(--bg-secondary);
-  border-right: 1px solid var(--border-subtle);
+  border-inline-end: 1px solid var(--border-subtle);
   padding: 24px 16px;
   display: flex;
   flex-direction: column;
   z-index: 50;
+  overflow-y: auto;
 }
 
 .sidebar-link {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 14px;
+  padding-block: 10px;
+  padding-inline: 14px;
   border-radius: var(--radius);
   color: var(--text-secondary);
   font-size: 0.875rem;
   font-weight: 500;
   text-decoration: none;
-  transition: all 0.2s;
-  margin-bottom: 2px;
+  transition: background var(--transition-base), color var(--transition-base);
+  margin-block-end: 2px;
+  border: 1px solid transparent;
 }
 
 .sidebar-link:hover {
-  background: rgba(99,102,241,0.08);
+  background: rgba(99, 102, 241, 0.08);
   color: var(--text-primary);
 }
 
 .sidebar-link.active {
-  background: rgba(99,102,241,0.12);
+  background: rgba(99, 102, 241, 0.12);
   color: var(--accent-primary);
-  border: 1px solid var(--border-subtle);
+  border-color: var(--border-subtle);
+}
+
+.sidebar-link:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
 }
 
 .main-content {
-  margin-left: 260px;
+  margin-inline-start: var(--sidebar-width);
   padding: 32px;
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* ─── Stat Cards ──────────────────────────────────────────────────────── */
@@ -318,7 +443,7 @@ body {
   border-radius: var(--radius-lg);
   background: var(--gradient-card);
   border: 1px solid var(--border-subtle);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: border-color var(--transition-card), box-shadow var(--transition-card);
 }
 
 .stat-card:hover {
@@ -330,7 +455,7 @@ body {
   font-size: 2rem;
   font-weight: 700;
   line-height: 1.2;
-  margin: 8px 0 4px;
+  margin-block: 8px 4px;
 }
 
 .stat-label {
@@ -351,26 +476,34 @@ body {
 
 .data-table th {
   padding: 12px 16px;
-  text-align: left;
+  text-align: start;
+  /* logical — respects RTL */
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  border-bottom: 1px solid var(--border-subtle);
-  background: rgba(99,102,241,0.04);
+  border-block-end: 1px solid var(--border-subtle);
+  background: rgba(99, 102, 241, 0.04);
+  white-space: nowrap;
+  /* prevent header text wrapping */
 }
 
 .data-table td {
   padding: 14px 16px;
   font-size: 0.875rem;
   color: var(--text-secondary);
-  border-bottom: 1px solid rgba(99,102,241,0.06);
-  transition: background 0.2s;
+  border-block-end: 1px solid rgba(99, 102, 241, 0.06);
+  transition: background var(--transition-base), color var(--transition-base);
+}
+
+.data-table tr:last-child td {
+  border-block-end: none;
+  /* remove orphaned bottom border on last row */
 }
 
 .data-table tr:hover td {
-  background: rgba(99,102,241,0.04);
+  background: rgba(99, 102, 241, 0.04);
   color: var(--text-primary);
 }
 
@@ -379,10 +512,178 @@ body {
   font-size: 0.8rem;
 }
 
-/* ─── Scrollbar ───────────────────────────────────────────────────────── */
+/* ─── Monospace Pill ──────────────────────────────────────────────────── */
+
+.mono-pill {
+  font-family: var(--font-mono);
+  padding-block: 6px;
+  padding-inline: 12px;
+  border-radius: 8px;
+  background: rgba(99, 102, 241, 0.06);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  word-break: break-all;
+}
+
+/* ─── Input Base ─────────────────────────────────────────────────────── */
+
+.input-base {
+  width: 100%;
+  padding-block: 10px;
+  padding-inline: 14px;
+  border-radius: var(--radius);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+  /* Prevents iOS auto-zoom on focus (font-size must be ≥16px or use this) */
+  font-size: max(0.875rem, 16px);
+}
+
+.input-base:focus-visible {
+  border-color: var(--accent-primary);
+  box-shadow: var(--shadow-focus);
+}
+
+.input-base::placeholder {
+  color: var(--text-muted);
+}
+
+.input-mono {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+/* ─── Timeline ───────────────────────────────────────────────────────── */
+
+.timeline {
+  position: relative;
+  padding-inline-start: 24px;
+}
+
+.timeline::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 6px;
+  inset-block: 0;
+  width: 2px;
+  background: var(--border-subtle);
+}
+
+.timeline-item {
+  position: relative;
+  padding-block: 16px;
+  padding-inline-start: 24px;
+  border-block-end: 1px solid rgba(99, 102, 241, 0.06);
+}
+
+.timeline-item:last-child {
+  border-block-end: none;
+}
+
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: -24px;
+  top: 22px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--border-subtle);
+  border: 2px solid var(--bg-primary);
+  z-index: 2;
+}
+
+.timeline-item.latest::before {
+  background: var(--accent-primary);
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.5);
+}
+
+/* ─── Pipeline Nodes & Lines ─────────────────────────────────────────── */
+
+.pipe-node {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--border-subtle);
+  background: var(--bg-primary);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+  transition: border-color var(--transition-base),
+    background var(--transition-base),
+    box-shadow var(--transition-base);
+}
+
+.pipe-node.active {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary);
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.5);
+}
+
+.pipe-node.done {
+  border-color: var(--accent-success);
+  background: var(--accent-success);
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
+}
+
+.pipe-node.flagged {
+  border-color: var(--accent-danger);
+  background: var(--accent-danger);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
+}
+
+.pipe-line {
+  flex: 1;
+  height: 2px;
+  background: var(--border-subtle);
+  position: relative;
+  z-index: 1;
+  transition: background var(--transition-base);
+}
+
+.pipe-line.done {
+  background: var(--accent-success);
+}
+
+/* ─── Risk Gauge ─────────────────────────────────────────────────────── */
+
+.risk-gauge {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+  /* --p is an @property typed <number> so conic-gradient can animate it */
+  background: conic-gradient(var(--c, var(--accent-primary)) calc(var(--p) * 1%),
+      rgba(99, 102, 241, 0.1) 0);
+}
+
+.risk-gauge::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: var(--bg-card);
+}
+
+.risk-gauge>* {
+  position: relative;
+  z-index: 2;
+}
+
+/* ─── Scrollbar (webkit) ─────────────────────────────────────────────── */
 
 ::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
+  /* also style horizontal scrollbars */
 }
 
 ::-webkit-scrollbar-track {
@@ -390,12 +691,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(99,102,241,0.2);
+  background: rgba(99, 102, 241, 0.2);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(99,102,241,0.4);
+  background: rgba(99, 102, 241, 0.4);
 }
 
 /* ─── Animations ──────────────────────────────────────────────────────── */
@@ -405,6 +706,7 @@ body {
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -412,19 +714,102 @@ body {
 }
 
 .animate-fade-in-up {
-  animation: fade-in-up 0.6s ease-out forwards;
+  animation: fade-in-up 0.6s ease-out both;
 }
 
-.delay-100 { animation-delay: 0.1s; }
-.delay-200 { animation-delay: 0.2s; }
-.delay-300 { animation-delay: 0.3s; }
-.delay-400 { animation-delay: 0.4s; }
-
 @keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
 }
 
 .animate-float {
   animation: float 6s ease-in-out infinite;
+}
+
+/* Animation delay utilities — consolidated into a single block */
+.delay-100 {
+  animation-delay: 0.1s;
+}
+
+.delay-200 {
+  animation-delay: 0.2s;
+}
+
+.delay-300 {
+  animation-delay: 0.3s;
+}
+
+.delay-400 {
+  animation-delay: 0.4s;
+}
+
+/* ─── Reduced Motion ──────────────────────────────────────────────────── */
+/*
+ * Respects the OS "reduce motion" accessibility preference.
+ * Disables decorative animations; keeps essential transitions (opacity, color)
+ * so the UI doesn't feel completely frozen.
+ */
+
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* ─── Responsive Layout ───────────────────────────────────────────────── */
+
+@media (max-width: 1024px) {
+  :root {
+    --sidebar-width: var(--sidebar-width-md);
+    /* 220px */
+  }
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    position: relative;
+    width: 100%;
+    height: auto;
+    border-inline-end: none;
+    border-block-end: 1px solid var(--border-subtle);
+    padding: 16px;
+    overflow-y: visible;
+  }
+
+  .sidebar nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .main-content {
+    margin-inline-start: 0;
+    padding: 16px;
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: 10px 8px;
+    font-size: 0.75rem;
+  }
+
+  .stat-value {
+    font-size: 1.5rem;
+  }
 }

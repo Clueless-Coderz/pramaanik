@@ -5,269 +5,251 @@ import {
   AlertTriangle,
   ShieldCheck,
   Lock,
+  Activity,
+  TrendingUp,
   FileSearch,
-  CheckCircle2,
-  XCircle,
-  Microscope,
-  Brain,
-  Fingerprint,
-  MapPin,
 } from "lucide-react";
-
-const stats = [
-  {
-    label: "Active Flags",
-    value: "23",
-    subtitle: "3 critical / 8 high",
-    icon: AlertTriangle,
-    color: "var(--accent-danger)",
-  },
-  {
-    label: "Proofs Verified",
-    value: "847",
-    subtitle: "100% pass rate",
-    icon: ShieldCheck,
-    color: "var(--accent-success)",
-  },
-  {
-    label: "Frozen Disbursements",
-    value: "7",
-    subtitle: "₹3.2 Cr held",
-    icon: Lock,
-    color: "var(--accent-primary)",
-  },
-  {
-    label: "Audit Reports Filed",
-    value: "12",
-    subtitle: "This quarter",
-    icon: FileSearch,
-    color: "var(--accent-secondary)",
-  },
-];
-
-const flaggedTransactions = [
-  {
-    id: "FLAG-003",
-    type: "Deceased Beneficiary",
-    scheme: "Ayushman Bharat",
-    risk: 9800,
-    disbursementId: "0x4b3c...d2e5",
-    amount: "₹2,50,000",
-    explanation: "Multi-source oracle: Aadhaar status = INACTIVE, death registry match confirmed. Payment to already-deceased patient mirroring CAG-documented PMJAY pattern.",
-    proofHash: "0x4b3c...d2e5",
-    proofVerified: true,
-    modelVersion: "RGCN v2.3",
-    motif: "Deceased-beneficiary subgraph: Treasury → Agency → Hospital → [DECEASED_DID]",
-    time: "1h ago",
-  },
-  {
-    id: "FLAG-002",
-    type: "Bank Account Reuse",
-    scheme: "PMKVY 3.0",
-    risk: 9200,
-    disbursementId: "0x1a9e...b7f4",
-    amount: "₹3,45,000",
-    explanation: "Account ACC_11111111 linked to 23 distinct beneficiary DIDs. Exact replication of PMKVY CAG Report No. 20/2025 pattern: 12,122 accounts shared across 52,381 participants.",
-    proofHash: "0x1a9e...b7f4",
-    proofVerified: true,
-    modelVersion: "RGCN v2.3",
-    motif: "Star-topology subgraph: 23 DIDs → 1 Bank Account (fan-in anomaly)",
-    time: "42 min ago",
-  },
-  {
-    id: "FLAG-001",
-    type: "Split Contract Pattern",
-    scheme: "MGNREGA Dahod",
-    risk: 8500,
-    disbursementId: "0x7c2f...a3d1",
-    amount: "₹24,90,000",
-    explanation: "5 transactions of ₹4.98L to same vendor within 24h. All just below ₹5L approval threshold. Matches Gujarat Dahod FIR pattern exactly.",
-    proofHash: "0x7c2f...a3d1",
-    proofVerified: true,
-    modelVersion: "RGCN v2.3",
-    motif: "Temporal burst: Agency → Vendor (×5 in 24h, amount clustering at ₹4.98L)",
-    time: "8 min ago",
-  },
-];
-
-function RiskBar({ risk }: { risk: number }) {
-  const pct = risk / 100;
-  const color = pct >= 90 ? "var(--accent-danger)" : pct >= 70 ? "var(--accent-warning)" : "var(--accent-success)";
-  return (
-    <div className="flex items-center gap-3">
-      <div className="flex-1 h-2 rounded-full" style={{ background: "rgba(255,255,255,0.05)" }}>
-        <div
-          className="h-2 rounded-full transition-all"
-          style={{ width: `${pct}%`, background: color }}
-        />
-      </div>
-      <span className="text-sm font-bold mono" style={{ color }}>
-        {pct.toFixed(0)}%
-      </span>
-    </div>
-  );
-}
+import { useChainData } from "../lib/useChainData";
 
 export default function AuditorDashboard() {
+  const { flags, frozen, trail, stats, connected } = useChainData();
+
+  const STATS = [
+    {
+      label: "Active Flags",
+      value: flags.length,
+      icon: AlertTriangle,
+      color: "var(--accent-danger)",
+      bg: "rgba(239,68,68,0.08)",
+    },
+    {
+      label: "Frozen Assets",
+      value: frozen.length,
+      icon: Lock,
+      color: "var(--accent-warning)",
+      bg: "rgba(245,158,11,0.08)",
+    },
+    {
+      label: "Audit Events",
+      value: trail.length,
+      icon: FileSearch,
+      color: "var(--accent-secondary)",
+      bg: "rgba(6,182,212,0.08)",
+    },
+    {
+      label: "Proofs Verified",
+      value: flags.filter((f) => f.proofVerified).length,
+      icon: ShieldCheck,
+      color: "var(--accent-success)",
+      bg: "rgba(16,185,129,0.08)",
+    },
+  ];
+
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-start justify-between gap-4 flex-wrap mb-8">
         <div>
-          <h1 className="text-2xl font-bold mb-1">Auditor Investigation Console</h1>
+          <h1 className="text-2xl font-bold mb-1">Auditor Dashboard</h1>
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-            CAG / Parliamentary audit dashboard · All proofs cryptographically verified
+            Real-time anomaly monitoring · zkML-attested fraud detection
           </p>
         </div>
-        <div className="flex items-center gap-2 text-xs" style={{ color: "var(--text-muted)" }}>
-          <div className="glow-dot" /> Model: RGCN v2.3 · EZKL Halo2 Active
+        <div
+          className="flex items-center gap-2 px-3 py-1.5 rounded-full"
+          style={{
+            background: connected
+              ? "rgba(16,185,129,0.06)"
+              : "rgba(245,158,11,0.06)",
+            border: `1px solid ${
+              connected
+                ? "rgba(16,185,129,0.2)"
+                : "rgba(245,158,11,0.2)"
+            }`,
+          }}
+        >
+          <span
+            className="w-2 h-2 rounded-full status-pulse"
+            style={{
+              background: connected ? "#10B981" : "#F59E0B",
+            }}
+          />
+          <span
+            className="text-[11px] font-semibold"
+            style={{
+              color: connected ? "#10B981" : "#F59E0B",
+            }}
+          >
+            {connected ? "Chain connected" : "Seeded fallback active"}
+          </span>
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-        {stats.map((s, i) => (
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        {STATS.map((s, i) => (
           <motion.div
             key={s.label}
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.1 }}
+            transition={{ delay: i * 0.08 }}
             className="stat-card"
           >
-            <div className="flex items-center justify-between mb-1">
-              <span className="stat-label">{s.label}</span>
-              <s.icon className="w-4 h-4" style={{ color: s.color }} />
+            <div className="flex items-center gap-2 mb-3">
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center"
+                style={{ background: s.bg }}
+              >
+                <s.icon className="w-4 h-4" style={{ color: s.color }} />
+              </div>
             </div>
             <div className="stat-value" style={{ color: s.color }}>
               {s.value}
             </div>
-            <div className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>
-              {s.subtitle}
-            </div>
+            <div className="stat-label">{s.label}</div>
           </motion.div>
         ))}
       </div>
 
-      {/* Flagged Transaction Deep-Dive Cards */}
-      <h2 className="font-bold text-sm flex items-center gap-2 mb-4" style={{ color: "var(--text-secondary)" }}>
-        <AlertTriangle className="w-4 h-4" style={{ color: "var(--accent-danger)" }} />
-        Flagged Transactions — Investigation Queue
-      </h2>
-
-      <div className="space-y-6">
-        {flaggedTransactions.map((f, i) => (
-          <motion.div
-            key={f.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.15 }}
-            className="glass-card p-0 overflow-hidden"
-          >
-            {/* Card Header */}
-            <div
-              className="p-5 flex items-center justify-between border-b"
-              style={{ borderColor: "var(--border-subtle)", background: "rgba(239,68,68,0.03)" }}
-            >
-              <div className="flex items-center gap-4">
-                <div className="relative">
-                  <div className="glow-dot-danger" />
-                </div>
-                <div>
-                  <span className="badge badge-flagged mr-2">{f.type}</span>
-                  <span className="text-xs mono" style={{ color: "var(--text-muted)" }}>
-                    {f.id}
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <button className="btn-danger text-xs">
-                  <Lock className="w-3 h-3" /> Freeze Disbursement
-                </button>
-                <button className="btn-secondary text-xs">
-                  <FileSearch className="w-3 h-3" /> Full Audit Trail
-                </button>
-              </div>
-            </div>
-
-            {/* Card Body */}
-            <div className="p-5 grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Left: Details */}
-              <div className="lg:col-span-2 space-y-4">
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>
-                    GNN Explanation (PANG Motif)
-                  </div>
-                  <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                    {f.explanation}
-                  </p>
-                </div>
-
-                <div className="p-3 rounded-lg" style={{ background: "rgba(99,102,241,0.06)", border: "1px solid var(--border-subtle)" }}>
-                  <div className="text-xs font-semibold mb-1" style={{ color: "var(--accent-primary)" }}>
-                    Subgraph Motif
-                  </div>
-                  <pre className="text-xs mono" style={{ color: "var(--text-secondary)" }}>
-                    {f.motif}
-                  </pre>
-                </div>
-
-                <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>
-                  Risk Score
-                </div>
-                <RiskBar risk={f.risk} />
-              </div>
-
-              {/* Right: Proof Verification */}
-              <div className="space-y-4">
-                <div className="p-4 rounded-lg border" style={{ borderColor: "var(--border-subtle)", background: "rgba(16,185,129,0.04)" }}>
-                  <div className="text-xs font-semibold uppercase tracking-wider mb-3 flex items-center gap-2" style={{ color: "var(--accent-success)" }}>
-                    <Microscope className="w-3 h-3" />
-                    zk-SNARK Proof Status
-                  </div>
-                  <div className="flex items-center gap-2 mb-3">
+      {/* Recent flags */}
+      <div
+        className="glass-card p-0 overflow-hidden mb-6"
+      >
+        <div
+          className="p-5 border-b flex items-center justify-between"
+          style={{ borderColor: "var(--border-subtle)" }}
+        >
+          <h2 className="font-bold text-sm flex items-center gap-2">
+            <AlertTriangle
+              className="w-4 h-4"
+              style={{ color: "var(--accent-danger)" }}
+            />
+            Recent Anomaly Flags
+          </h2>
+          <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+            {flags.length} total
+          </span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Type</th>
+                <th>Scheme</th>
+                <th>Risk</th>
+                <th>Amount</th>
+                <th>Proof</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {flags.map((f) => (
+                <tr key={f.id}>
+                  <td>
+                    <span className="font-mono text-xs" style={{ color: "var(--accent-danger)" }}>
+                      {f.id}
+                    </span>
+                  </td>
+                  <td className="text-sm font-semibold">{f.type}</td>
+                  <td className="text-sm">{f.scheme}</td>
+                  <td>
+                    <span
+                      className="text-xs font-bold px-2 py-0.5 rounded-full"
+                      style={{
+                        background:
+                          f.severity === "critical"
+                            ? "rgba(239,68,68,0.12)"
+                            : f.severity === "high"
+                            ? "rgba(245,158,11,0.12)"
+                            : "rgba(129,140,248,0.12)",
+                        color:
+                          f.severity === "critical"
+                            ? "#EF4444"
+                            : f.severity === "high"
+                            ? "#F59E0B"
+                            : "#818CF8",
+                      }}
+                    >
+                      {Math.round(f.risk / 100)}%
+                    </span>
+                  </td>
+                  <td className="font-semibold text-sm">{f.amount}</td>
+                  <td>
                     {f.proofVerified ? (
-                      <>
-                        <CheckCircle2 className="w-5 h-5" style={{ color: "var(--accent-success)" }} />
-                        <span className="text-sm font-bold" style={{ color: "var(--accent-success)" }}>
-                          Verified On-Chain
-                        </span>
-                      </>
+                      <ShieldCheck
+                        className="w-4 h-4"
+                        style={{ color: "var(--accent-success)" }}
+                      />
                     ) : (
-                      <>
-                        <XCircle className="w-5 h-5" style={{ color: "var(--accent-danger)" }} />
-                        <span className="text-sm font-bold" style={{ color: "var(--accent-danger)" }}>
-                          Verification Failed
-                        </span>
-                      </>
+                      <Activity
+                        className="w-4 h-4"
+                        style={{ color: "var(--accent-warning)" }}
+                      />
                     )}
-                  </div>
-                  <div className="space-y-2 text-xs" style={{ color: "var(--text-muted)" }}>
-                    <div className="flex justify-between">
-                      <span>Proof Hash:</span>
-                      <span className="mono">{f.proofHash}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Model:</span>
-                      <span>{f.modelVersion}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Scheme:</span>
-                      <span>{f.scheme}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Amount:</span>
-                      <span className="font-bold">{f.amount}</span>
-                    </div>
-                  </div>
-                </div>
+                  </td>
+                  <td className="text-xs" style={{ color: "var(--text-muted)" }}>
+                    {f.time}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-                <div className="text-xs text-center" style={{ color: "var(--text-muted)" }}>
-                  {f.time}
+      {/* Recent audit trail */}
+      <div className="glass-card p-0 overflow-hidden">
+        <div
+          className="p-5 border-b flex items-center justify-between"
+          style={{ borderColor: "var(--border-subtle)" }}
+        >
+          <h2 className="font-bold text-sm flex items-center gap-2">
+            <FileSearch
+              className="w-4 h-4"
+              style={{ color: "var(--accent-secondary)" }}
+            />
+            Latest Audit Trail Events
+          </h2>
+          <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+            {trail.length} events
+          </span>
+        </div>
+        <div className="divide-y" style={{ borderColor: "var(--border-subtle)" }}>
+          {trail.slice(0, 5).map((ev) => (
+            <div key={ev.seq} className="p-4 flex items-start gap-3">
+              <div
+                className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5"
+                style={{
+                  background: ev.verified
+                    ? "rgba(16,185,129,0.12)"
+                    : "rgba(245,158,11,0.12)",
+                }}
+              >
+                <span
+                  className="text-[10px] font-bold"
+                  style={{
+                    color: ev.verified ? "#10B981" : "#F59E0B",
+                  }}
+                >
+                  #{ev.seq}
+                </span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-sm mb-0.5">{ev.title}</div>
+                <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  {ev.actor} · {ev.when}
                 </div>
               </div>
+              <span
+                className="font-mono text-[10px] shrink-0"
+                style={{ color: "var(--text-muted)" }}
+              >
+                {ev.txId}
+              </span>
             </div>
-          </motion.div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   );

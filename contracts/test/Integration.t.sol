@@ -98,7 +98,9 @@ contract IntegrationTest is Test {
             "ipfs://doc/sanction001",
             true,  // GST valid
             true,  // Bank unique
-            true   // Geotag verified
+            true,  // Geotag verified
+            FundFlow.GovLevel.Central,
+            FundFlow.GovLevel.State
         );
         vm.stopPrank();
 
@@ -148,7 +150,9 @@ contract IntegrationTest is Test {
             "ipfs://doc/vendor001",
             true,
             true,
-            true
+            true,
+            FundFlow.GovLevel.Central,
+            FundFlow.GovLevel.State
         );
         vm.stopPrank();
 
@@ -253,7 +257,9 @@ contract IntegrationTest is Test {
             amount,
             keccak256("fuzz_doc"),
             "ipfs://fuzz",
-            true, true, true
+            true, true, true,
+            FundFlow.GovLevel.Central,
+            FundFlow.GovLevel.State
         );
         vm.stopPrank();
 
@@ -280,7 +286,9 @@ contract IntegrationTest is Test {
                 498000000, // ₹49.8L each
                 keccak256(abi.encodePacked("doc_", i)),
                 "ipfs://doc/split",
-                true, true, true
+                true, true, true,
+                FundFlow.GovLevel.Central,
+                FundFlow.GovLevel.State
             );
         }
         vm.stopPrank();
@@ -319,7 +327,9 @@ contract IntegrationTest is Test {
             1000,
             keccak256("doc"),
             "ipfs://doc",
-            true, true, true
+            true, true, true,
+            FundFlow.GovLevel.Central,
+            FundFlow.GovLevel.State
         );
 
         // Non-oracle cannot flag
@@ -350,7 +360,9 @@ contract IntegrationTest is Test {
             600000000, // ₹6 Crore — above ₹5Cr threshold
             keccak256("doc_high_value"),
             "ipfs://doc/highvalue",
-            true, true, true
+            true, true, true,
+            FundFlow.GovLevel.Central,
+            FundFlow.GovLevel.State
         );
         vm.stopPrank();
 
@@ -395,7 +407,9 @@ contract IntegrationTest is Test {
             300000000, // ₹3 Crore
             keccak256("doc_tranche1"),
             "ipfs://doc/tranche1",
-            true, true, true
+            true, true, true,
+            FundFlow.GovLevel.Central,
+            FundFlow.GovLevel.State
         );
 
         // Advance to WorkCompleted

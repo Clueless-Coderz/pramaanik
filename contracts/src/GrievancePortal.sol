@@ -15,19 +15,23 @@ contract GrievancePortal is AccessControlUpgradeable, UUPSUpgradeable, Reentranc
     bytes32 public constant CITIZEN_ROLE = keccak256("CITIZEN_ROLE");
     bytes32 public constant AUDITOR_ROLE = keccak256("AUDITOR_ROLE");
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
+    bytes32 public constant CSC_AGENT_ROLE = keccak256("CSC_AGENT_ROLE"); // For proxy filing (CSC)
+    uint64 public constant SLA_HOURS = 72; // 72 hours auto-escalation SLA
 
     // ─── Types ───────────────────────────────────────────────────────────
     enum GrievanceStatus { Filed, Acknowledged, UnderReview, Resolved, Escalated, Rejected }
 
     struct Grievance {
         bytes32 grievanceId;
-        bytes32 disbursementId;       // linked disbursement (optional — can be bytes32(0))
+        bytes32 disbursementId;       // linked disbursement (optional)
         bytes32 schemeId;             // linked scheme
-        address filedBy;              // citizen address (pseudonymous via Privado ID)
-        string description;           // encrypted description hash or plain text
-        string evidenceIpfsCid;       // IPFS CID for supporting evidence
+        address filedBy;              // citizen address OR agent address
+        bool isAssisted;              // true if filed by CSC agent
+        bytes32 nullifierHash;        // ZK-nullifier to prevent spam, preserves anonymity
+        string description;
+        string evidenceIpfsCid;
         GrievanceStatus status;
-        string resolution;            // resolution notes (set by admin)
+        string resolution;
         uint64 filedAt;
         uint64 resolvedAt;
         uint64 lastUpdatedAt;
@@ -38,8 +42,14 @@ contract GrievancePortal is AccessControlUpgradeable, UUPSUpgradeable, Reentranc
     bytes32[] public grievanceIds;
     uint256 public grievanceCount;
 
-    // Per-citizen grievance tracking
+    // Per-citizen grievance tracking (only for self-filed)
     mapping(address => bytes32[]) public citizenGrievances;
+
+    // Per-scheme grievance tracking
+    mapping(bytes32 => bytes32[]) public schemeGrievances;
+
+    // To prevent spam in anonymous assisted filings
+    mapping(bytes32 => bool) public usedNullifiers;
 
     // ─── Events ──────────────────────────────────────────────────────────
     event GrievanceFiled(
@@ -47,6 +57,12 @@ contract GrievancePortal is AccessControlUpgradeable, UUPSUpgradeable, Reentranc
         bytes32 indexed schemeId,
         bytes32 indexed disbursementId,
         address filedBy
+    );
+    event AssistedGrievanceFiled(
+        bytes32 indexed grievanceId,
+        bytes32 indexed schemeId,
+        address indexed agent,
+        bytes32 nullifierHash
     );
     event GrievanceStatusChanged(bytes32 indexed grievanceId, GrievanceStatus oldStatus, GrievanceStatus newStatus);
     event GrievanceResolved(bytes32 indexed grievanceId, string resolution);
@@ -56,6 +72,7 @@ contract GrievancePortal is AccessControlUpgradeable, UUPSUpgradeable, Reentranc
     error GrievanceNotFound(bytes32 id);
     error EmptyDescription();
     error AlreadyResolved(bytes32 id);
+    error NullifierAlreadyUsed(bytes32 nullifier);
 
     // ─── Initializer ─────────────────────────────────────────────────────
     function initialize(address _admin) external initializer {
@@ -68,15 +85,12 @@ contract GrievancePortal is AccessControlUpgradeable, UUPSUpgradeable, Reentranc
         _grantRole(UPGRADER_ROLE, _admin);
         _setRoleAdmin(CITIZEN_ROLE, ADMIN_ROLE);
         _setRoleAdmin(AUDITOR_ROLE, ADMIN_ROLE);
+        _setRoleAdmin(CSC_AGENT_ROLE, ADMIN_ROLE);
     }
 
     // ─── File Grievance ──────────────────────────────────────────────────
 
-    /// @notice File a new grievance. Open to CITIZEN_ROLE holders.
-    /// @param _schemeId The scheme this grievance is about.
-    /// @param _disbursementId Optional specific disbursement (bytes32(0) for general).
-    /// @param _description Grievance description.
-    /// @param _evidenceCid IPFS CID for supporting evidence.
+    /// @notice File a new grievance (Self-filed). Open to CITIZEN_ROLE.
     function fileGrievance(
         bytes32 _schemeId,
         bytes32 _disbursementId,
@@ -94,6 +108,8 @@ contract GrievancePortal is AccessControlUpgradeable, UUPSUpgradeable, Reentranc
             disbursementId: _disbursementId,
             schemeId: _schemeId,
             filedBy: msg.sender,
+            isAssisted: false,
+            nullifierHash: bytes32(0),
             description: _description,
             evidenceIpfsCid: _evidenceCid,
             status: GrievanceStatus.Filed,
@@ -105,9 +121,52 @@ contract GrievancePortal is AccessControlUpgradeable, UUPSUpgradeable, Reentranc
 
         grievanceIds.push(grievanceId);
         citizenGrievances[msg.sender].push(grievanceId);
+        schemeGrievances[_schemeId].push(grievanceId);
         grievanceCount++;
 
         emit GrievanceFiled(grievanceId, _schemeId, _disbursementId, msg.sender);
+    }
+
+    /// @notice File an anonymous grievance on behalf of an uneducated/elderly citizen.
+    ///         Uses a ZK-nullifier derived from biometric/Aadhaar signature.
+    /// @dev Open to CSC_AGENT_ROLE. Protects citizen identity entirely.
+    function fileGrievanceAssisted(
+        bytes32 _schemeId,
+        bytes32 _disbursementId,
+        string calldata _description,
+        string calldata _evidenceCid,
+        bytes32 _nullifierHash
+    ) external onlyRole(CSC_AGENT_ROLE) nonReentrant returns (bytes32 grievanceId) {
+        if (bytes(_description).length == 0) revert EmptyDescription();
+        if (usedNullifiers[_nullifierHash]) revert NullifierAlreadyUsed(_nullifierHash);
+
+        usedNullifiers[_nullifierHash] = true;
+
+        grievanceId = keccak256(
+            abi.encodePacked(msg.sender, _schemeId, _nullifierHash, block.timestamp, grievanceCount)
+        );
+
+        grievances[grievanceId] = Grievance({
+            grievanceId: grievanceId,
+            disbursementId: _disbursementId,
+            schemeId: _schemeId,
+            filedBy: msg.sender, // The agent's address, NOT the citizen
+            isAssisted: true,
+            nullifierHash: _nullifierHash,
+            description: _description,
+            evidenceIpfsCid: _evidenceCid,
+            status: GrievanceStatus.Filed,
+            resolution: "",
+            filedAt: uint64(block.timestamp),
+            resolvedAt: 0,
+            lastUpdatedAt: uint64(block.timestamp)
+        });
+
+        grievanceIds.push(grievanceId);
+        schemeGrievances[_schemeId].push(grievanceId);
+        grievanceCount++;
+
+        emit AssistedGrievanceFiled(grievanceId, _schemeId, msg.sender, _nullifierHash);
     }
 
     // ─── Status Management ───────────────────────────────────────────────
@@ -156,6 +215,24 @@ contract GrievancePortal is AccessControlUpgradeable, UUPSUpgradeable, Reentranc
         emit GrievanceEscalated(_grievanceId, msg.sender);
     }
 
+    /// @notice Auto-escalate a grievance if the SLA is breached (Public).
+    function autoEscalateIfSLABreached(bytes32 _grievanceId) external {
+        Grievance storage g = _getGrievance(_grievanceId);
+        if (g.status == GrievanceStatus.Resolved || g.status == GrievanceStatus.Rejected || g.status == GrievanceStatus.Escalated) {
+            revert("Grievance already closed or escalated");
+        }
+        
+        if (block.timestamp <= g.filedAt + (SLA_HOURS * 1 hours)) {
+            revert("SLA not breached yet");
+        }
+
+        GrievanceStatus old = g.status;
+        g.status = GrievanceStatus.Escalated;
+        g.lastUpdatedAt = uint64(block.timestamp);
+        emit GrievanceStatusChanged(_grievanceId, old, GrievanceStatus.Escalated);
+        emit GrievanceEscalated(_grievanceId, address(0)); // address(0) implies auto-escalation
+    }
+
     /// @notice Reject a grievance with reason (Admin).
     function rejectGrievance(bytes32 _grievanceId, string calldata _reason)
         external
@@ -181,6 +258,29 @@ contract GrievancePortal is AccessControlUpgradeable, UUPSUpgradeable, Reentranc
 
     function getAllGrievanceIds() external view returns (bytes32[] memory) {
         return grievanceIds;
+    }
+
+    function getGrievancesByScheme(bytes32 _schemeId) external view returns (bytes32[] memory) {
+        return schemeGrievances[_schemeId];
+    }
+
+    function getGrievancesByStatus(GrievanceStatus _status) external view returns (bytes32[] memory) {
+        uint256 count = 0;
+        for (uint256 i = 0; i < grievanceIds.length; i++) {
+            if (grievances[grievanceIds[i]].status == _status) {
+                count++;
+            }
+        }
+        
+        bytes32[] memory result = new bytes32[](count);
+        uint256 index = 0;
+        for (uint256 i = 0; i < grievanceIds.length; i++) {
+            if (grievances[grievanceIds[i]].status == _status) {
+                result[index] = grievanceIds[i];
+                index++;
+            }
+        }
+        return result;
     }
 
     // ─── Internals ───────────────────────────────────────────────────────

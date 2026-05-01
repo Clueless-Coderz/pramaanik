@@ -62,7 +62,9 @@ contract FundFlowTest is Test {
             "ipfs://doc",
             true,  // gstValid
             true,  // bankUnique
-            true   // geotagVerified
+            true,  // geotagVerified
+            FundFlow.GovLevel.Central,
+            FundFlow.GovLevel.State
         );
 
         FundFlow.Disbursement memory d = fundFlow.getDisbursement(dId);
@@ -89,7 +91,9 @@ contract FundFlowTest is Test {
             "ipfs://doc",
             true,
             true,
-            true
+            true,
+            FundFlow.GovLevel.Central,
+            FundFlow.GovLevel.State
         );
 
         FundFlow.Disbursement memory d = fundFlow.getDisbursement(dId);
@@ -110,7 +114,9 @@ contract FundFlowTest is Test {
             "ipfs://doc",
             true,
             true,
-            true
+            true,
+            FundFlow.GovLevel.Central,
+            FundFlow.GovLevel.State
         );
         vm.stopPrank();
 
@@ -120,5 +126,40 @@ contract FundFlowTest is Test {
 
         FundFlow.Disbursement memory d = fundFlow.getDisbursement(dId);
         assertEq(uint8(d.stage), uint8(FundFlow.FlowStage.Flagged));
+    }
+
+    /// @notice Fuzz tests the multi-sig threshold boundary (₹5 Crore).
+    ///         An off-by-one error here would bypass required secondary approvals.
+    function testFuzz_MultiSigThreshold(uint256 amount) public {
+        vm.assume(amount > 0);
+        vm.assume(amount < 10000000000000); // Max 10,000 Cr bounds check
+
+        vm.startPrank(admin);
+        bytes32 toDid = keccak256("did:polygonid:fuzz_multisig");
+        
+        bytes32 dId = fundFlow.createDisbursement(
+            schemeId,
+            FundFlow.FlowStage.Sanctioned,
+            toDid,
+            amount,
+            keccak256("doc"),
+            "ipfs://doc",
+            true, true, true,
+            FundFlow.GovLevel.Central,
+            FundFlow.GovLevel.State
+        );
+        vm.stopPrank();
+
+        FundFlow.Disbursement memory d = fundFlow.getDisbursement(dId);
+        
+        // 5 Crore threshold = 500,000,000 paisa (since 1 Rupee = 100 Paisa)
+        // Actually, looking at the code, it's MULTISIG_THRESHOLD_AMOUNT
+        // Assuming it's 500_000_000_000 paisa = 5 Crore rupees
+        // We will just verify the boolean flag matches the expected logical operator
+        if (amount >= fundFlow.MULTISIG_THRESHOLD_AMOUNT()) {
+            assertTrue(d.multiSigRequired, "Should require multi-sig >= threshold");
+        } else {
+            assertFalse(d.multiSigRequired, "Should not require multi-sig < threshold");
+        }
     }
 }

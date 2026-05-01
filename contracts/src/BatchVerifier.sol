@@ -88,6 +88,7 @@ contract BatchVerifier is AccessControlUpgradeable, UUPSUpgradeable {
         bytes calldata _aggregatedProof
     ) external onlyRole(PROVER_ROLE) returns (uint256 batchId) {
         if (_batchRoot == bytes32(0)) revert InvalidBatchRoot();
+        require(_proofCount > 0 && _proofCount <= 10000, "Invalid proof count (1-10000)");
 
         bool verified = _verifyBatchProof(_aggregatedProof, _batchRoot);
 

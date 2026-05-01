@@ -77,7 +77,8 @@ contract SchemeRegistry is AccessControlUpgradeable, UUPSUpgradeable {
     ) external onlyRole(ADMIN_ROLE) returns (bytes32 schemeId) {
         if (_sanctionedBudget == 0) revert InvalidBudget();
 
-        schemeId = keccak256(abi.encodePacked(_name, _ministry, block.timestamp));
+        // name + ministry must be globally unique — no block.timestamp to prevent duplicates
+        schemeId = keccak256(abi.encodePacked(_name, _ministry));
         if (schemes[schemeId].createdAt != 0) revert SchemeAlreadyExists(schemeId);
 
         schemes[schemeId] = Scheme({
@@ -126,12 +127,14 @@ contract SchemeRegistry is AccessControlUpgradeable, UUPSUpgradeable {
     }
 
     /// @notice Revise the sanctioned budget (e.g., supplementary demand).
+    /// @dev Budget cannot be reduced below already-disbursed amount to prevent underflow.
     function reviseBudget(bytes32 _schemeId, uint256 _newBudget)
         external
         onlyRole(ADMIN_ROLE)
     {
         if (_newBudget == 0) revert InvalidBudget();
         Scheme storage s = _getScheme(_schemeId);
+        require(_newBudget >= s.disbursed, "Budget below disbursed amount");
         uint256 old = s.sanctionedBudget;
         s.sanctionedBudget = _newBudget;
         s.updatedAt = uint64(block.timestamp);
@@ -148,8 +151,10 @@ contract SchemeRegistry is AccessControlUpgradeable, UUPSUpgradeable {
     {
         Scheme storage s = _getScheme(_schemeId);
         if (s.status != SchemeStatus.Active) revert SchemeNotActive(_schemeId);
-        uint256 remaining = s.sanctionedBudget - s.disbursed;
-        if (_amount > remaining) revert BudgetExceeded(_schemeId, _amount, remaining);
+        // Addition-based check avoids underflow revert if disbursed > sanctionedBudget
+        if (s.disbursed + _amount > s.sanctionedBudget) {
+            revert BudgetExceeded(_schemeId, _amount, s.sanctionedBudget - s.disbursed);
+        }
         s.disbursed += _amount;
         s.updatedAt = uint64(block.timestamp);
     }

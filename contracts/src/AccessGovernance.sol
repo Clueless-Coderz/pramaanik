@@ -21,6 +21,7 @@ contract AccessGovernance is AccessControlUpgradeable, UUPSUpgradeable, Reentran
     struct Identity {
         string did;             // W3C DID string (e.g. did:polygonid:...)
         bytes32 vcHash;         // SHA-256 hash of the verifiable credential
+        bytes32 grantedRole;    // Role granted at registration (for revocation on deactivation)
         uint64 registeredAt;
         uint64 lastActiveAt;
         bool active;
@@ -39,6 +40,7 @@ contract AccessGovernance is AccessControlUpgradeable, UUPSUpgradeable, Reentran
     error NotRegistered(address account);
     error IdentityInactive(address account);
     error InvalidDID();
+    error InvalidRole(bytes32 role);
 
     // ─── Initializer ─────────────────────────────────────────────────────
     function initialize(address _defaultAdmin) external initializer {
@@ -70,10 +72,13 @@ contract AccessGovernance is AccessControlUpgradeable, UUPSUpgradeable, Reentran
     ) external onlyRole(ADMIN_ROLE) {
         if (identities[_account].registeredAt != 0) revert AlreadyRegistered(_account);
         if (bytes(_did).length == 0) revert InvalidDID();
+        // Whitelist: only allow safe operational roles — never UPGRADER or DEFAULT_ADMIN
+        if (_role != ADMIN_ROLE && _role != AUDITOR_ROLE && _role != CITIZEN_ROLE) revert InvalidRole(_role);
 
         identities[_account] = Identity({
             did: _did,
             vcHash: _vcHash,
+            grantedRole: _role,
             registeredAt: uint64(block.timestamp),
             lastActiveAt: uint64(block.timestamp),
             active: true
@@ -85,18 +90,24 @@ contract AccessGovernance is AccessControlUpgradeable, UUPSUpgradeable, Reentran
     }
 
     /// @notice Deactivate an identity (soft-delete — DPDP compliance).
+    ///         Also revokes the granted OpenZeppelin role so the account loses all permissions.
     function deactivateIdentity(address _account) external onlyRole(ADMIN_ROLE) {
         Identity storage id = identities[_account];
         if (id.registeredAt == 0) revert NotRegistered(_account);
         id.active = false;
+        // Revoke the OpenZeppelin role — deactivation is no longer cosmetic
+        _revokeRole(id.grantedRole, _account);
         emit IdentityDeactivated(_account, id.did);
     }
 
     /// @notice Reactivate a previously deactivated identity.
+    ///         Restores the original granted role.
     function reactivateIdentity(address _account) external onlyRole(ADMIN_ROLE) {
         Identity storage id = identities[_account];
         if (id.registeredAt == 0) revert NotRegistered(_account);
         id.active = true;
+        // Restore the OpenZeppelin role
+        _grantRole(id.grantedRole, _account);
         emit IdentityReactivated(_account, id.did);
     }
 
@@ -106,7 +117,8 @@ contract AccessGovernance is AccessControlUpgradeable, UUPSUpgradeable, Reentran
     }
 
     /// @notice Update last-active timestamp (called by other contracts on interaction).
-    function touchActivity(address _account) external {
+    /// @dev Restricted to ADMIN_ROLE to prevent unauthorized timestamp manipulation.
+    function touchActivity(address _account) external onlyRole(ADMIN_ROLE) {
         Identity storage id = identities[_account];
         if (id.registeredAt != 0 && id.active) {
             id.lastActiveAt = uint64(block.timestamp);

@@ -19,6 +19,16 @@ The Digital Personal Data Protection Act, 2023 (DPDP Act) and the Digital Person
 | Beneficiary names | Off-chain (encrypted IPFS) | Personal data |
 | Supporting documents | Off-chain (encrypted IPFS) | May contain personal data |
 
+## Contract-Level DPDP Mapping
+
+| Smart Contract | DPDP Functionality / Obligation Managed |
+|---|---|
+| **AccessGovernance.sol** | **Identity Masking**: Maps DIDs to addresses without storing PII. Handles Role Revocation if consent is withdrawn. |
+| **FundFlow.sol** | **Data Minimization**: Stores only pseudonymous `toPseudonymDid` and encrypted IPFS `supportingDocHash`. |
+| **GrievancePortal.sol** | **§13 Right to Grievance**: Provides a tamper-proof mechanism for citizens to exercise their data rights and complain. |
+| **ConstitutionalCompliance.sol** | **§15 Breach Notification**: Automatically escalates violations after 72 hours (SLA enforcement), aligning with CERT-In and DPBI breach reporting timelines. |
+| **AnomalyOracle.sol** | **Algorithmic Transparency**: Verifies zkML proofs on-chain, proving that AI risk profiling was deterministic and untampered (combating algorithmic bias). |
+
 ## DPDP Compliance Matrix
 
 | DPDP Provision | Requirement | PRAMAANIK Implementation |
