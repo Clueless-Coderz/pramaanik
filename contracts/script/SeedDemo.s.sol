@@ -2,9 +2,9 @@
 pragma solidity 0.8.24;
 
 import "forge-std/Script.sol";
-import "./contracts/src/SchemeRegistry.sol";
-import "./contracts/src/FundFlow.sol";
-import "./contracts/src/GrievancePortal.sol";
+import "../src/SchemeRegistry.sol";
+import "../src/FundFlow.sol";
+import "../src/GrievancePortal.sol";
 
 /// @title  SeedDemoScript
 /// @notice Seeds the blockchain with realistic demo data for PRAMAANIK.

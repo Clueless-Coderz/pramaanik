@@ -699,7 +699,7 @@ function WalletConnectStage({
               style={{ background: role.color }}
             >
               <Scan className="w-4 h-4" />
-              I've Scanned — Wait for Proof
+              I&apos;ve Scanned — Wait for Proof
             </button>
 
             {/* Raw JSON (dev helper) */}

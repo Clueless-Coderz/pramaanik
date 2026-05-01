@@ -11,14 +11,18 @@ import time
 import hashlib
 import logging
 import asyncio
+import threading
+import uuid
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import Optional
 from pathlib import Path
-import uuid
 
 import redis
 import ezkl
+import uvicorn
+from fastapi import FastAPI
+from fastapi.responses import PlainTextResponse
 
 logging.basicConfig(
     level=logging.INFO,
@@ -350,10 +354,7 @@ def run_worker():
 # HTTP API (for health checks and metrics)
 # ═══════════════════════════════════════════════════════════════════════
 
-from fastapi import FastAPI
-import uvicorn
-import threading
-
+# FastAPI app for health checks and metrics
 api = FastAPI(title="PRAMAANIK EZKL Prover")
 
 @api.get("/health")
@@ -370,7 +371,6 @@ def health():
 
 @api.get("/metrics")
 def prom_metrics():
-    from fastapi.responses import PlainTextResponse
     return PlainTextResponse(metrics.to_prometheus())
 
 @api.post("/prove")

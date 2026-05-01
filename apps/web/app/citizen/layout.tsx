@@ -201,8 +201,10 @@ export default function CitizenLayout({ children }: { children: ReactNode }) {
 
   // Close drawer on route change
   useEffect(() => {
-    setDrawerOpen(false);
-  }, [pathname]);
+    if (drawerOpen) {
+      setDrawerOpen(false);
+    }
+  }, [pathname, drawerOpen]);
 
   // Escape key + body scroll lock
   const handleKeyDown = useCallback((e: KeyboardEvent) => {

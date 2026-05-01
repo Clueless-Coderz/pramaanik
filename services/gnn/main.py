@@ -12,13 +12,13 @@ import time
 import hashlib
 import json
 import logging
+import uvicorn
 import numpy as np
+import torch
+import torch_geometric.nn as pyg_nn
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Optional
-
-import torch
-import torch_geometric.nn as pyg_nn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
@@ -653,6 +653,5 @@ def vendor_stats():
 
 
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8080)
 
