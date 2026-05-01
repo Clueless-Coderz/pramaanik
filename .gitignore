@@ -1,0 +1,19 @@
+# Node
+node_modules/
+dist/
+.env
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Foundry
+out/
+cache/
+broadcast/
+.gas-snapshot
+
+# OS
+.DS_Store
