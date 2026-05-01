@@ -326,6 +326,100 @@ contract IntegrationTest is Test {
         fundFlow.flagSuspicious(bytes32(0), 8000, keccak256("proof"), "fake");
     }
 
+    // ═════════════════════════════════════════════════════════════════
+    // TEST 8: Multi-Sig — High-value disbursement requires 2-of-3
+    // ═════════════════════════════════════════════════════════════════
+
+    function test_MultiSig_HighValueRequires2of3() public {
+        address admin2 = address(0x10);
+        address admin3 = address(0x11);
+
+        // Grant ADMIN_ROLE to two more officials
+        vm.startPrank(admin);
+        fundFlow.grantRole(fundFlow.ADMIN_ROLE(), admin2);
+        fundFlow.grantRole(fundFlow.ADMIN_ROLE(), admin3);
+
+        // Create a >₹5Cr disbursement (triggers multi-sig)
+        bytes32 toDid = keccak256("did:polygonid:state_treasury");
+        bytes32 disbId = fundFlow.createDisbursement(
+            schemeId,
+            FundFlow.FlowStage.Sanctioned,
+            toDid,
+            600000000, // ₹6 Crore — above ₹5Cr threshold
+            keccak256("doc_high_value"),
+            "ipfs://doc/highvalue",
+            true, true, true
+        );
+        vm.stopPrank();
+
+        // Verify multi-sig is required and creator auto-approved (count=1)
+        FundFlow.Disbursement memory d = fundFlow.getDisbursement(disbId);
+        assertTrue(d.multiSigRequired);
+        assertEq(d.approvalCount, 1);
+        assertFalse(fundFlow.isFullyApproved(disbId));
+
+        // Advancing should fail — only 1 of 2 approvals
+        vm.prank(admin);
+        vm.expectRevert();
+        fundFlow.advanceStage(disbId, FundFlow.FlowStage.ReleasedToState);
+
+        // Second official approves
+        vm.prank(admin2);
+        fundFlow.approveMultiSig(disbId);
+
+        // Now it's fully approved
+        assertTrue(fundFlow.isFullyApproved(disbId));
+
+        // Advancing should now succeed
+        vm.prank(admin);
+        fundFlow.advanceStage(disbId, FundFlow.FlowStage.ReleasedToState);
+
+        d = fundFlow.getDisbursement(disbId);
+        assertEq(uint8(d.stage), uint8(FundFlow.FlowStage.ReleasedToState));
+    }
+
+    // ═════════════════════════════════════════════════════════════════
+    // TEST 9: Utilization Certificate — Escrow before next tranche
+    // ═════════════════════════════════════════════════════════════════
+
+    function test_UtilizationCert_EscrowFlow() public {
+        // Create disbursement
+        vm.startPrank(admin);
+        bytes32 toDid = keccak256("did:polygonid:agency_001");
+        bytes32 disbId = fundFlow.createDisbursement(
+            schemeId,
+            FundFlow.FlowStage.Sanctioned,
+            toDid,
+            300000000, // ₹3 Crore
+            keccak256("doc_tranche1"),
+            "ipfs://doc/tranche1",
+            true, true, true
+        );
+
+        // Advance to WorkCompleted
+        fundFlow.advanceStage(disbId, FundFlow.FlowStage.ReleasedToAgency);
+        fundFlow.advanceStage(disbId, FundFlow.FlowStage.ReleasedToVendor);
+        fundFlow.advanceStage(disbId, FundFlow.FlowStage.ReleasedToBeneficiary);
+        fundFlow.advanceStage(disbId, FundFlow.FlowStage.WorkCompleted);
+
+        // Submit utilization certificate
+        bytes32 certHash = keccak256("utilization_cert_FY2026_Q1");
+        fundFlow.submitUtilizationCert(disbId, certHash);
+        vm.stopPrank();
+
+        // Verify stage is UtilCertPending
+        FundFlow.Disbursement memory d = fundFlow.getDisbursement(disbId);
+        assertEq(uint8(d.stage), uint8(FundFlow.FlowStage.UtilCertPending));
+        assertEq(d.utilizationCertHash, certHash);
+
+        // CAG/Auditor verifies the cert
+        vm.prank(auditor);
+        fundFlow.verifyUtilizationCert(disbId);
+
+        d = fundFlow.getDisbursement(disbId);
+        assertEq(uint8(d.stage), uint8(FundFlow.FlowStage.UtilCertVerified));
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────
 
     function _hashPair(bytes32 a, bytes32 b) internal pure returns (bytes32) {
