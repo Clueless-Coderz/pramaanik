@@ -1,23 +1,73 @@
 version: '3.8'
 
 services:
-  # ─── BLOCKCHAIN BASE LAYER ──────────────────────────────────────────────────
-  besu:
+  # ─── BLOCKCHAIN BASE LAYER (4-Node QBFT Consortium) ─────────────────────────
+  besu-node1:
     image: hyperledger/besu:latest
     ports:
       - "8545:8545"
-      - "9545:9545"  # Prometheus metrics
+      - "9545:9545"
+      - "30303:30303"
     command: [
-      "--network=dev",
+      "--genesis-file=/config/genesis.json",
+      "--node-private-key-file=/config/node1/key",
+      "--p2p-port=30303",
       "--rpc-http-enabled",
-      "--rpc-http-api=ETH,NET,WEB3,DEBUG,MINER,TXPOOL",
+      "--rpc-http-api=ETH,NET,WEB3,DEBUG,MINER,TXPOOL,QBFT",
       "--host-allowlist=*",
       "--rpc-http-cors-origins=all",
       "--metrics-enabled",
-      "--metrics-port=9545"
+      "--metrics-port=9545",
+      "--metrics-host=0.0.0.0"
     ]
     volumes:
-      - besu-data:/opt/besu/data
+      - ./besu-config:/config
+      - besu-data-1:/opt/besu/data
+
+  besu-node2:
+    image: hyperledger/besu:latest
+    ports:
+      - "8546:8545"
+      - "30304:30303"
+    command: [
+      "--genesis-file=/config/genesis.json",
+      "--node-private-key-file=/config/node2/key",
+      "--p2p-port=30303",
+      "--bootnodes=enode://cc0b7b134d193ed7a151b75dbedb53272d73356e9cff541c4639912beffc1c1fce72b78b17f8a855364ce0be1f4bdc8f8d2279cdb882362b535d21a2212999da@besu-node1:30303"
+    ]
+    volumes:
+      - ./besu-config:/config
+      - besu-data-2:/opt/besu/data
+
+  besu-node3:
+    image: hyperledger/besu:latest
+    ports:
+      - "8547:8545"
+      - "30305:30303"
+    command: [
+      "--genesis-file=/config/genesis.json",
+      "--node-private-key-file=/config/node3/key",
+      "--p2p-port=30303",
+      "--bootnodes=enode://cc0b7b134d193ed7a151b75dbedb53272d73356e9cff541c4639912beffc1c1fce72b78b17f8a855364ce0be1f4bdc8f8d2279cdb882362b535d21a2212999da@besu-node1:30303"
+    ]
+    volumes:
+      - ./besu-config:/config
+      - besu-data-3:/opt/besu/data
+
+  besu-node4:
+    image: hyperledger/besu:latest
+    ports:
+      - "8548:8545"
+      - "30306:30303"
+    command: [
+      "--genesis-file=/config/genesis.json",
+      "--node-private-key-file=/config/node4/key",
+      "--p2p-port=30303",
+      "--bootnodes=enode://cc0b7b134d193ed7a151b75dbedb53272d73356e9cff541c4639912beffc1c1fce72b78b17f8a855364ce0be1f4bdc8f8d2279cdb882362b535d21a2212999da@besu-node1:30303"
+    ]
+    volumes:
+      - ./besu-config:/config
+      - besu-data-4:/opt/besu/data
 
   # ─── OFF-CHAIN GNN & ZKML PIPELINE ──────────────────────────────────────────
   gnn-inference:
@@ -30,7 +80,7 @@ services:
       - ZKML_WORKER_URL=http://zkml-prover:8081
       - NEO4J_URI=bolt://neo4j:7687
       - NEO4J_USER=neo4j
-      - NEO4J_PASSWORD=pramaanik123
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-pramaanik123}
     depends_on:
       - neo4j
       - redis
@@ -66,7 +116,7 @@ services:
       - NPCI_API_KEY=${NPCI_API_KEY:-}
       - NIC_GEOTAG_API_URL=${NIC_GEOTAG_API_URL:-}
     depends_on:
-      - besu
+      - besu-node1
 
   # ─── GRAPH DATABASE FOR ANOMALY DETECTION ───────────────────────────────────
   neo4j:
@@ -75,7 +125,7 @@ services:
       - "7474:7474"
       - "7687:7687"
     environment:
-      - NEO4J_AUTH=neo4j/pramaanik123
+      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-pramaanik123}
     volumes:
       - neo4j-data:/data
 
@@ -94,12 +144,12 @@ services:
       context: ./services/anchor
       dockerfile: Dockerfile
     environment:
-      - BESU_RPC_URL=http://besu:8545
+      - BESU_RPC_URL=http://besu-node1:8545
       - POLYGON_AMOY_RPC_URL=${POLYGON_AMOY_RPC_URL}
       - SEPOLIA_RPC_URL=${SEPOLIA_RPC_URL}
       - PRIVATE_KEY=${PUBLISHER_PRIVATE_KEY}
     depends_on:
-      - besu
+      - besu-node1
 
   # ─── IPFS STORAGE ───────────────────────────────────────────────────────────
   ipfs:
@@ -120,7 +170,7 @@ services:
     environment:
       - NEXT_PUBLIC_RPC_URL=http://localhost:8545
     depends_on:
-      - besu
+      - besu-node1
       - gnn-inference
 
   # ─── OBSERVABILITY STACK (Gap #6) ───────────────────────────────────────────
@@ -150,7 +200,10 @@ services:
       - prometheus
 
 volumes:
-  besu-data:
+  besu-data-1:
+  besu-data-2:
+  besu-data-3:
+  besu-data-4:
   neo4j-data:
   zkml-data:
   ipfs-data:
