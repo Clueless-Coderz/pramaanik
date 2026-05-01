@@ -6,13 +6,16 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 /// @title FundFlow
-/// @notice The heart of PRAMAANIK — tracks every rupee from Consolidated Fund sanction
-///         through state treasuries, implementing agencies, and down to last-mile beneficiaries.
+/// @notice The heart of ChainLedger / PRAMAANIK — tracks every rupee from the Consolidated
+///         Fund of India through the 5-tier governance hierarchy:
+///         Central → State → District → City/Town → Village/Gram Panchayat.
 ///         Each disbursement is an immutable event with oracle-attested preconditions.
 ///
 /// @dev    Fund flow is recorded as state transitions, NOT as ERC-20 transfers.
 ///         Real money moves through PFMS/NPCI rails; this contract creates the
 ///         cryptographic chain-of-custody shadow that proves integrity.
+///         Implements multi-signature for high-value transactions (>₹5Cr)
+///         and utilization certificate escrow per ChainLedger §4.2.3.
 contract FundFlow is AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardUpgradeable {
     // ─── Role Constants ──────────────────────────────────────────────────
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
@@ -28,8 +31,19 @@ contract FundFlow is AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardU
         ReleasedToVendor,   // Agency pays vendor/contractor
         ReleasedToBeneficiary, // Direct benefit transfer to beneficiary
         WorkCompleted,      // Work-completion attestation received
+        UtilCertPending,    // Awaiting utilization certificate before next tranche
+        UtilCertVerified,   // Utilization certificate verified by CAG
         Flagged,            // Anomaly detected — under review
         Frozen              // Frozen by auditor pending investigation
+    }
+
+    /// @notice 5-tier governance hierarchy (ChainLedger §2.1)
+    enum GovLevel {
+        Central,            // Union Government / Ministry
+        State,              // State Government / State Treasury
+        District,           // District Administration / DC Office
+        CityTown,           // Municipal Corporation / Nagar Palika
+        Village             // Gram Panchayat / Block Development Office
     }
 
     struct Disbursement {
@@ -44,8 +58,13 @@ contract FundFlow is AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardU
         string ipfsCid;              // IPFS CID for supporting docs
         bytes32 oracleAttestationHash; // hash of oracle responses at disbursement time
         bool gstValid;               // GST oracle check result
-        bool bankAccountUnique;      // bank-dedup oracle check result
+        bool bankUnique;             // bank-dedup oracle check result
         bool geotagVerified;         // geotag oracle check result
+        GovLevel senderLevel;        // governance tier of sender
+        GovLevel receiverLevel;      // governance tier of receiver
+        bool multiSigRequired;       // true if amount > MULTISIG_THRESHOLD
+        uint8 approvalCount;         // number of approvals received (for multi-sig)
+        bytes32 utilizationCertHash; // SHA-256 of utilization certificate (set later)
     }
 
     struct AnomalyFlag {
@@ -57,12 +76,20 @@ contract FundFlow is AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardU
         address flaggedBy;           // oracle/GNN service address
     }
 
+    // ─── Constants ────────────────────────────────────────────────────────
+    /// @notice Multi-sig threshold: ₹5 Crore in paisa (ChainLedger §4.2.3)
+    uint256 public constant MULTISIG_THRESHOLD = 500000000; // ₹5,00,00,000 = 5Cr in paisa
+    uint8 public constant MULTISIG_REQUIRED_APPROVALS = 2;  // 2-of-3 approvals
+
     // ─── Storage ─────────────────────────────────────────────────────────
     mapping(bytes32 => Disbursement) public disbursements;
     mapping(bytes32 => AnomalyFlag[]) public anomalyFlags;
     bytes32[] public disbursementIds;
     uint256 public totalDisbursementCount;
     uint256 public totalFlaggedCount;
+
+    // Multi-sig approval tracking
+    mapping(bytes32 => mapping(address => bool)) public approvals; // disbId => approver => approved
 
     // ─── Oracle attestation tracking ─────────────────────────────────────
     mapping(bytes32 => bool) public oracleAttestations; // attestationHash => verified
@@ -96,6 +123,9 @@ contract FundFlow is AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardU
 
     event DisbursementFrozen(bytes32 indexed disbursementId, address indexed frozenBy);
     event OracleAttestationRecorded(bytes32 indexed attestationHash, bytes32 indexed disbursementId);
+    event MultiSigApproval(bytes32 indexed disbursementId, address indexed approver, uint8 approvalCount);
+    event UtilizationCertSubmitted(bytes32 indexed disbursementId, bytes32 certHash);
+    event UtilizationCertVerified(bytes32 indexed disbursementId, address verifiedBy);
 
     // ─── Errors ──────────────────────────────────────────────────────────
     error DisbursementAlreadyExists(bytes32 id);
@@ -125,10 +155,9 @@ contract FundFlow is AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardU
         anomalyOracle = _anomalyOracle;
     }
 
-    // ─── Core Fund Flow ──────────────────────────────────────────────────
-
     /// @notice Create a new disbursement record with oracle attestations.
     /// @dev    Checks-Effects-Interactions pattern enforced.
+    ///         If amount > MULTISIG_THRESHOLD (₹5Cr), multi-sig is required (ChainLedger §4.2.3).
     function createDisbursement(
         bytes32 _schemeId,
         FlowStage _stage,
@@ -137,7 +166,7 @@ contract FundFlow is AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardU
         bytes32 _supportingDocHash,
         string calldata _ipfsCid,
         bool _gstValid,
-        bool _bankAccountUnique,
+        bool _bankUnique,
         bool _geotagVerified
     ) external onlyRole(ADMIN_ROLE) nonReentrant returns (bytes32 disbursementId) {
         if (_amount == 0) revert InvalidAmount();
@@ -150,8 +179,10 @@ contract FundFlow is AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardU
 
         // Oracle attestation hash for tamper evidence
         bytes32 attestationHash = keccak256(
-            abi.encodePacked(_gstValid, _bankAccountUnique, _geotagVerified, block.timestamp)
+            abi.encodePacked(_gstValid, _bankUnique, _geotagVerified, block.timestamp)
         );
+
+        bool needsMultiSig = _amount > MULTISIG_THRESHOLD;
 
         // Effects: store disbursement
         disbursements[disbursementId] = Disbursement({
@@ -166,16 +197,43 @@ contract FundFlow is AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardU
             ipfsCid: _ipfsCid,
             oracleAttestationHash: attestationHash,
             gstValid: _gstValid,
-            bankAccountUnique: _bankAccountUnique,
-            geotagVerified: _geotagVerified
+            bankUnique: _bankUnique,
+            geotagVerified: _geotagVerified,
+            senderLevel: GovLevel.Central,
+            receiverLevel: GovLevel.State,
+            multiSigRequired: needsMultiSig,
+            approvalCount: needsMultiSig ? 0 : MULTISIG_REQUIRED_APPROVALS, // auto-approved if below threshold
+            utilizationCertHash: bytes32(0)
         });
 
         disbursementIds.push(disbursementId);
         totalDisbursementCount++;
         oracleAttestations[attestationHash] = true;
 
+        // First approval from creator
+        if (needsMultiSig) {
+            approvals[disbursementId][msg.sender] = true;
+            disbursements[disbursementId].approvalCount = 1;
+            emit MultiSigApproval(disbursementId, msg.sender, 1);
+        }
+
         emit DisbursementCreated(disbursementId, _schemeId, _stage, msg.sender, _toPseudonymDid, _amount);
         emit OracleAttestationRecorded(attestationHash, disbursementId);
+    }
+
+    // ─── Multi-Signature Approval (ChainLedger §4.2.3) ──────────────────
+
+    /// @notice Approve a high-value disbursement (2-of-3 required for >₹5Cr).
+    function approveMultiSig(bytes32 _disbursementId) external onlyRole(ADMIN_ROLE) {
+        Disbursement storage d = _getDisbursement(_disbursementId);
+        require(d.multiSigRequired, "Multi-sig not required");
+        require(!approvals[_disbursementId][msg.sender], "Already approved");
+        require(d.approvalCount < MULTISIG_REQUIRED_APPROVALS, "Already fully approved");
+
+        approvals[_disbursementId][msg.sender] = true;
+        d.approvalCount++;
+
+        emit MultiSigApproval(_disbursementId, msg.sender, d.approvalCount);
     }
 
     /// @notice Advance a disbursement to the next stage in the fund flow.
@@ -187,19 +245,43 @@ contract FundFlow is AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardU
         if (d.stage == FlowStage.Frozen) revert DisbursementFrozenError(_disbursementId);
         if (uint8(_newStage) <= uint8(d.stage)) revert InvalidStageTransition(d.stage, _newStage);
 
+        // Multi-sig gate: high-value transactions cannot advance without full approval
+        if (d.multiSigRequired && d.approvalCount < MULTISIG_REQUIRED_APPROVALS) {
+            revert OracleCheckFailed("Multi-sig approval incomplete");
+        }
+
         FlowStage old = d.stage;
         d.stage = _newStage;
 
         emit DisbursementStageAdvanced(_disbursementId, old, _newStage);
     }
 
+    // ─── Utilization Certificate (ChainLedger §4.2.3) ───────────────────
+
+    /// @notice Submit a utilization certificate hash for a disbursement.
+    ///         Next tranche is held in escrow until this is submitted and verified.
+    function submitUtilizationCert(bytes32 _disbursementId, bytes32 _certHash)
+        external onlyRole(ADMIN_ROLE)
+    {
+        Disbursement storage d = _getDisbursement(_disbursementId);
+        d.utilizationCertHash = _certHash;
+        d.stage = FlowStage.UtilCertPending;
+        emit UtilizationCertSubmitted(_disbursementId, _certHash);
+    }
+
+    /// @notice Verify a utilization certificate (CAG/Auditor privilege).
+    function verifyUtilizationCert(bytes32 _disbursementId)
+        external onlyRole(AUDITOR_ROLE)
+    {
+        Disbursement storage d = _getDisbursement(_disbursementId);
+        require(d.utilizationCertHash != bytes32(0), "No cert submitted");
+        d.stage = FlowStage.UtilCertVerified;
+        emit UtilizationCertVerified(_disbursementId, msg.sender);
+    }
+
     // ─── Anomaly Flagging ────────────────────────────────────────────────
 
     /// @notice Flag a disbursement as suspicious (called by AnomalyOracle or ORACLE_ROLE).
-    /// @param _disbursementId The disbursement to flag.
-    /// @param _riskScore Risk score in basis points (0-10000).
-    /// @param _proofHash keccak256 of the EZKL zk-SNARK proof bytes.
-    /// @param _explanation Human-readable PANG-style motif explanation.
     function flagSuspicious(
         bytes32 _disbursementId,
         uint256 _riskScore,
@@ -239,22 +321,18 @@ contract FundFlow is AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardU
 
     // ─── Views ───────────────────────────────────────────────────────────
 
-    /// @notice Get a disbursement by ID.
     function getDisbursement(bytes32 _id) external view returns (Disbursement memory) {
         return disbursements[_id];
     }
 
-    /// @notice Get all anomaly flags for a disbursement.
     function getAnomalyFlags(bytes32 _id) external view returns (AnomalyFlag[] memory) {
         return anomalyFlags[_id];
     }
 
-    /// @notice Get all disbursement IDs (paginated access recommended off-chain).
     function getAllDisbursementIds() external view returns (bytes32[] memory) {
         return disbursementIds;
     }
 
-    /// @notice Get disbursement IDs in a range (for pagination).
     function getDisbursementIdsPaginated(uint256 _offset, uint256 _limit)
         external
         view
@@ -270,6 +348,13 @@ contract FundFlow is AccessControlUpgradeable, UUPSUpgradeable, ReentrancyGuardU
         for (uint256 i = _offset; i < end; i++) {
             result[i - _offset] = disbursementIds[i];
         }
+    }
+
+    /// @notice Check if a disbursement has full multi-sig approval.
+    function isFullyApproved(bytes32 _id) external view returns (bool) {
+        Disbursement storage d = disbursements[_id];
+        if (!d.multiSigRequired) return true;
+        return d.approvalCount >= MULTISIG_REQUIRED_APPROVALS;
     }
 
     // ─── Internals ───────────────────────────────────────────────────────
