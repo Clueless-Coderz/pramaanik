@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ─── Smart Contract Tests ───────────────────────────────────────────
+  contracts:
+    name: Solidity Tests & Audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Install dependencies
+        run: forge install
+
+      - name: Build
+        run: forge build --sizes
+
+      - name: Test (10k fuzz runs)
+        run: forge test -vvv --fuzz-runs 10000
+
+      - name: Coverage
+        run: forge coverage --report summary
+
+      - name: Slither Analysis
+        uses: crytic/slither-action@v0.4.0
+        with:
+          target: contracts/src/
+          slither-args: --filter-paths "lib/"
+        continue-on-error: true
+
+      - name: Upload Audit Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: audit-reports
+          path: contracts/audit/
+
+  # ─── Frontend Build ─────────────────────────────────────────────────
+  frontend:
+    name: Frontend Build & Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+  # ─── Python Services ────────────────────────────────────────────────
+  python:
+    name: Python Services Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install linting tools
+        run: pip install ruff
+
+      - name: Lint GNN service
+        run: ruff check services/gnn/
+
+      - name: Lint zkML service
+        run: ruff check services/zkml/
+
+      - name: Lint data generators
+        run: ruff check data/

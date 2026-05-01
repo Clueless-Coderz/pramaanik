@@ -2,18 +2,42 @@
 node_modules/
 dist/
 .env
+.env.local
 
 # Python
 __pycache__/
 *.pyc
+*.pyo
 venv/
 .venv/
+*.egg-info/
 
 # Foundry
-out/
-cache/
-broadcast/
+contracts/out/
+contracts/cache/
+contracts/broadcast/
 .gas-snapshot
+
+# Next.js
+apps/web/.next/
+apps/web/out/
+
+# EZKL artifacts
+*.compiled
+*.key
+*.json.bak
+witness.json
+settings.json
 
 # OS
 .DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docker
+*.log
