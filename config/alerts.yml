@@ -1,0 +1,97 @@
+groups:
+  - name: pramaanik_critical
+    rules:
+      # ─── Besu Chain Health ──────────────────────────────────────────
+      - alert: BesuValidatorsLow
+        expr: besu_peers_connected < 3
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Besu validators below QBFT minimum"
+          description: "Only {{ $value }} validators connected. QBFT needs ≥3 of 4."
+
+      - alert: BesuBlockProductionStalled
+        expr: rate(besu_blockchain_height[5m]) == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Besu block production has stalled"
+
+      # ─── GNN Service ────────────────────────────────────────────────
+      - alert: GnnDriftDetected
+        expr: gnn_drift_detected == 1
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "GNN model drift detected"
+          description: "PSI score {{ $value }} exceeds threshold. Model retraining recommended."
+
+      - alert: GnnInferenceLatencyHigh
+        expr: gnn_inference_time_p99_ms > 500
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "GNN P99 inference latency above 500ms"
+
+      - alert: GnnServiceDown
+        expr: up{job="gnn-inference"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "GNN inference service is down"
+
+      # ─── zkML Prover ────────────────────────────────────────────────
+      - alert: EzklQueueDepthHigh
+        expr: zkml_queue_depth > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "EZKL proof queue depth is high ({{ $value }} jobs)"
+
+      - alert: EzklSlaBreaches
+        expr: increase(zkml_proofs_timeout_total[1h]) > 5
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Multiple EZKL proof SLA breaches in the last hour"
+
+      - alert: EzklProverDown
+        expr: up{job="zkml-prover"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "EZKL prover service is down"
+
+      # ─── Oracle Relayer ─────────────────────────────────────────────
+      - alert: OracleCircuitOpen
+        expr: circuit_breaker_trips > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Oracle circuit breaker is OPEN for {{ $labels.service }}"
+
+      - alert: OracleServiceDown
+        expr: up{job="oracle-relayer"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Oracle relayer is down — disbursement attestation unavailable"
+
+      # ─── Anchor Publisher ───────────────────────────────────────────
+      - alert: AnchorMissed
+        expr: time() - anchor_last_checkpoint_timestamp > 1800
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No anchor checkpoint in the last 30 minutes"
