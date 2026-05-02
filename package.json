@@ -1,0 +1,9 @@
+{
+  "scripts": {
+    "build": "echo 'Build skipped'"
+  },
+  "devDependencies": {
+    "docx": "^9.6.1",
+    "ngrok": "^5.0.0-beta.2"
+  }
+}
