@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>PRAMAANIK · Trace Funds</title>
+  <meta name="description" content="PRAMAANIK Public Fund Transparency Dashboard">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡</text></svg>">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body class="bg-grid">
+  <div id="mobileHeader"></div>
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <h1 class="text-2xl font-bold mb-1">Trace Fund Flow</h1>
+    <p class="text-sm mb-6" style="color:var(--text-muted)">Follow any disbursement from Treasury to last mile with full on-chain audit trail</p>
+
+    <!-- Search -->
+    <div class="glass-card-static p-5 mb-6">
+      <div class="flex gap-3" style="flex-wrap:wrap">
+        <input class="input-base" style="flex:1;min-width:200px" placeholder="Enter TX ID, Scheme, or DID..." id="traceInput" value="0x7c2f...a3d1">
+        <button class="btn-primary btn-sm" onclick="renderTrail()">Trace</button>
+      </div>
+    </div>
+
+    <!-- Pipeline -->
+    <div class="glass-card-static p-5 mb-6">
+      <h2 class="font-bold text-sm mb-3">Disbursement Pipeline</h2>
+      <div style="display:flex;align-items:center;gap:0;padding:8px 0">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0"><div class="pipe-node done"></div><div class="text-xs" style="color:var(--text-muted)">Sanctioned</div></div>
+        <div class="pipe-line done"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0"><div class="pipe-node done"></div><div class="text-xs" style="color:var(--text-muted)">Oracle</div></div>
+        <div class="pipe-line done"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0"><div class="pipe-node done"></div><div class="text-xs" style="color:var(--text-muted)">Flagged</div></div>
+        <div class="pipe-line done"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0"><div class="pipe-node active"></div><div class="text-xs" style="color:var(--text-muted)">Frozen</div></div>
+        <div class="pipe-line"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0"><div class="pipe-node"></div><div class="text-xs" style="color:var(--text-muted)">Released</div></div>
+        <div class="pipe-line"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0"><div class="pipe-node"></div><div class="text-xs" style="color:var(--text-muted)">Anchored</div></div>
+      </div>
+    </div>
+
+    <!-- Timeline -->
+    <div class="glass-card-static p-5">
+      <h2 class="font-bold text-sm mb-4">Audit Trail</h2>
+      <div class="timeline" id="trailTimeline"></div>
+    </div>
+  </main>
+  <script src="../js/data.js"></script>
+  <script src="../js/auth.js"></script>
+  <script src="../js/sidebar.js"></script>
+  <script>
+    PRAMAANIK.initPage('citizen','trace');
+    // Read TX ID from URL query param (from citizen dashboard row click)
+    var urlParams = new URLSearchParams(window.location.search);
+    var txFromUrl = urlParams.get('tx');
+    if (txFromUrl) document.getElementById('traceInput').value = txFromUrl;
+    function renderTrail() {
+      var query = (document.getElementById('traceInput').value || '').trim().toLowerCase();
+      var trail = PRAMAANIK.trail;
+      // Filter trail by input value if provided
+      if (query && query !== '0x7c2f...a3d1') {
+        trail = trail.filter(function(e) {
+          return e.txId.toLowerCase().indexOf(query) >= 0 ||
+                 e.title.toLowerCase().indexOf(query) >= 0 ||
+                 e.description.toLowerCase().indexOf(query) >= 0 ||
+                 e.actor.toLowerCase().indexOf(query) >= 0;
+        });
+      }
+      if (trail.length === 0) {
+        document.getElementById('trailTimeline').innerHTML = '<div class="p-4 text-center text-sm" style="color:var(--text-muted)">No matching trail events found for "' + query + '"</div>';
+        return;
+      }
+      document.getElementById('trailTimeline').innerHTML = trail.map(function(e, i) {
+        return '<div class="timeline-item' + (i===0?' latest':'') + '">' +
+          '<div class="flex items-center justify-between mb-1">' +
+            '<span class="font-bold text-sm">' + e.title + '</span>' +
+            '<span class="text-xs" style="color:var(--text-muted)">' + e.when + '</span>' +
+          '</div>' +
+          '<div class="text-xs mb-2" style="color:var(--text-muted)">' +
+            e.actor + ' · <span class="font-mono">' + e.txId + '</span>' +
+          '</div>' +
+          '<p class="text-sm" style="color:var(--text-secondary)">' + e.description + '</p>' +
+          '<div class="flex items-center gap-1 mt-2">' +
+            (e.verified
+              ? '<svg class="icon icon-sm" viewBox="0 0 24 24" style="color:var(--accent-success)"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span class="text-xs" style="color:var(--accent-success)">Verified on-chain</span>'
+              : '<span class="text-xs" style="color:var(--text-muted)">Pending verification</span>') +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+    renderTrail();
+  </script>
+</body>
+</html>

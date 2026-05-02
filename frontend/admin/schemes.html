@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>PRAMAANIK · Schemes</title>
+  <meta name="description" content="PRAMAANIK Public Fund Transparency Dashboard">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡</text></svg>">
+  <link rel="stylesheet" href="../css/style.css">
+  <style>.progress-track{height:8px;border-radius:4px;background:rgba(255,255,255,0.06);overflow:hidden;flex:1}.progress-fill{height:100%;border-radius:4px;transition:width .5s ease}</style>
+</head>
+<body class="bg-grid">
+  <div id="mobileHeader"></div>
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <h1 class="text-2xl font-bold mb-1">Registered Schemes</h1>
+    <p class="text-sm mb-6" style="color:var(--text-muted)">All government schemes tracked on-chain via SchemeRegistry</p>
+    <div class="grid grid-2 gap-5" id="schemesGrid"></div>
+  </main>
+  <script src="../js/data.js"></script>
+  <script src="../js/auth.js"></script>
+  <script src="../js/sidebar.js"></script>
+  <script>
+    PRAMAANIK.initPage('admin','schemes');
+    document.getElementById('schemesGrid').innerHTML = PRAMAANIK.schemes.map(s => {
+      const color = s.disbursedPct >= 80 ? 'var(--accent-success)' : s.disbursedPct >= 20 ? 'var(--accent-warning)' : 'var(--accent-primary)';
+      return `
+      <div class="glass-card p-6">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-bold text-sm">${s.name}</h3>
+          <span class="badge badge-active">${s.disbursed}</span>
+        </div>
+        <p class="text-xs mb-3" style="color:var(--text-muted)">${s.ministry}</p>
+        <div class="grid grid-2 gap-3 mb-4">
+          <div class="p-3 rounded-lg" style="background:rgba(99,102,241,0.04)">
+            <div class="text-xs uppercase tracking-wider mb-1" style="color:var(--text-muted)">Budget</div>
+            <div class="font-semibold text-sm font-mono">${s.budget}</div>
+          </div>
+          <div class="p-3 rounded-lg" style="background:rgba(99,102,241,0.04)">
+            <div class="text-xs uppercase tracking-wider mb-1" style="color:var(--text-muted)">Beneficiaries</div>
+            <div class="font-semibold text-sm">${s.beneficiaries}</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="progress-track"><div class="progress-fill" style="width:${s.disbursedPct}%;background:${color}"></div></div>
+          <span class="text-xs font-mono font-semibold" style="color:${color}">${s.disbursedPct}%</span>
+        </div>
+      </div>`;
+    }).join('');
+  </script>
+</body>
+</html>

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>PRAMAANIK · Auditor Dashboard</title>
+  <meta name="description" content="PRAMAANIK Public Fund Transparency Dashboard">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡</text></svg>">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body class="bg-grid">
+  <div id="mobileHeader"></div>
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="flex items-center justify-between mb-8" style="flex-wrap:wrap;gap:16px">
+      <div>
+        <h1 class="text-2xl font-bold mb-1">Auditor Dashboard</h1>
+        <p class="text-sm" style="color:var(--text-muted)">Anomaly investigation & frozen asset management</p>
+      </div>
+      <div class="flex items-center gap-2 text-xs" style="color:var(--text-muted)">
+        <span class="glow-dot-danger"></span> 3 active flags
+      </div>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="grid grid-4 gap-5 mb-8" id="auditorStats"></div>
+
+    <!-- Flags + Frozen -->
+    <div class="grid gap-6" style="grid-template-columns:1fr 1fr" id="auditorPanels"></div>
+  </main>
+  <script src="../js/data.js"></script>
+  <script src="../js/auth.js"></script>
+  <script src="../js/sidebar.js"></script>
+  <script>
+    const P = PRAMAANIK;
+    P.initPage('auditor','dashboard');
+
+    // Stats
+    const frozenCount = P.frozen.filter(f=>f.status!=='Released').length;
+    const frozenValue = P.frozen.filter(f=>f.status!=='Released').reduce((s,f)=>s+f.amountRaw,0);
+    document.getElementById('auditorStats').innerHTML = [
+      { label:"Active Flags", value:P.flags.length, color:"var(--accent-danger)", icon:'alertTriangle' },
+      { label:"Frozen Assets", value:frozenCount, color:"var(--accent-primary)", icon:'snowflake' },
+      { label:"Total Frozen Value", value:`₹${(frozenValue/10000000).toFixed(2)} Cr`, color:"var(--accent-warning)", icon:'rupee' },
+      { label:"Proofs Verified", value:P.flags.filter(f=>f.proofVerified).length+'/'+P.flags.length, color:"var(--accent-success)", icon:'checkCircle' },
+    ].map(s => `
+      <div class="stat-card">
+        <div class="flex items-center justify-between mb-1">
+          <span class="stat-label">${s.label}</span>
+          <span style="color:${s.color}">${P.icon(s.icon)}</span>
+        </div>
+        <div class="stat-value" style="color:${s.color}">${s.value}</div>
+      </div>
+    `).join('');
+
+    // Panels
+    const sevBadge = { critical:'badge-flagged', high:'badge-pending', medium:'badge-frozen' };
+    document.getElementById('auditorPanels').innerHTML = `
+      <!-- Flags -->
+      <div class="glass-card-static p-5">
+        <h2 class="font-bold text-sm flex items-center gap-2 mb-4">
+          ${P.icon('alertTriangle')} Active Anomaly Flags
+        </h2>
+        <div class="space-y-4">
+          ${P.flags.map(f => {
+            const pct = f.risk/100;
+            const c = pct>=90?'var(--accent-danger)':pct>=70?'var(--accent-warning)':'var(--accent-primary)';
+            return `
+            <div class="p-4 rounded-lg" style="background:rgba(239,68,68,0.04);border:1px solid var(--border-subtle)">
+              <div class="flex items-center justify-between mb-2">
+                <span class="font-bold text-sm">${f.type}</span>
+                <span class="badge ${sevBadge[f.severity]}">${f.severity}</span>
+              </div>
+              <p class="text-xs mb-2" style="color:var(--text-secondary)">${f.explanation}</p>
+              <div class="flex items-center gap-2">
+                <div class="risk-bar-track"><div class="risk-bar-fill" style="width:${pct}%;background:${c}"></div></div>
+                <span class="text-xs font-mono font-bold" style="color:${c}">${pct.toFixed(0)}%</span>
+              </div>
+              <div class="text-xs mt-2" style="color:var(--text-muted)">${f.time} · ${f.amount}</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+      <!-- Frozen -->
+      <div class="glass-card-static p-5">
+        <h2 class="font-bold text-sm flex items-center gap-2 mb-4">
+          ${P.icon('lock')} Frozen Disbursements
+        </h2>
+        <div class="space-y-4">
+          ${P.frozen.map(f => {
+            const statusBadge = f.status==='Frozen'?'badge-frozen':f.status==='Under Review'?'badge-pending':'badge-active';
+            return `
+            <div class="p-4 rounded-lg" style="background:rgba(99,102,241,0.04);border:1px solid var(--border-subtle)">
+              <div class="flex items-center justify-between mb-2">
+                <span class="font-bold text-sm">${f.id}</span>
+                <span class="badge ${statusBadge}">${f.status}</span>
+              </div>
+              <div class="text-sm font-semibold mb-1">${f.scheme}</div>
+              <p class="text-xs mb-3" style="color:var(--text-secondary)">${f.reason}</p>
+              <div class="flex items-center justify-between text-xs" style="color:var(--text-muted)">
+                <span class="font-mono">${f.amount}</span>
+                <span>${f.daysLocked}d locked · ${f.frozenBy}</span>
+              </div>
+              <div class="flex gap-2 mt-3">
+                <button class="btn-primary btn-sm flex-1 justify-center" style="background:var(--accent-success)" onclick="alert('Demo: releasing ${f.id}')">Release</button>
+                <button class="btn-secondary btn-sm flex-1 justify-center" onclick="alert('Demo: extending ${f.id}')">Extend +7d</button>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  </script>
+</body>
+</html>

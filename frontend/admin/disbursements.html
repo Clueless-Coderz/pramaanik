@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>PRAMAANIK · Disbursements</title>
+  <meta name="description" content="PRAMAANIK Public Fund Transparency Dashboard">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡</text></svg>">
+  <link rel="stylesheet" href="../css/style.css">
+  <style>
+    .modal-field{margin-bottom:16px}
+    .modal-field label{display:block;font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+    select.input-base{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
+    .pipeline{display:flex;align-items:center;gap:0;padding:16px 0}
+    .pipe-stage{display:flex;flex-direction:column;align-items:center;gap:4px;flex-shrink:0}
+    .pipe-stage-label{font-size:.65rem;color:var(--text-muted);max-width:60px;text-align:center;line-height:1.2}
+  </style>
+</head>
+<body class="bg-grid">
+  <div id="mobileHeader"></div>
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="flex items-center justify-between mb-6" style="flex-wrap:wrap;gap:16px">
+      <div>
+        <h1 class="text-2xl font-bold mb-1">Disbursements</h1>
+        <p class="text-sm" style="color:var(--text-muted)">All fund flow transactions with oracle verification status</p>
+      </div>
+      <button class="btn-primary btn-sm" onclick="openModal()">+ New Disbursement</button>
+    </div>
+
+    <!-- Pipeline -->
+    <div class="glass-card-static p-5 mb-6">
+      <h2 class="font-bold text-sm mb-2">Fund Flow Pipeline</h2>
+      <div class="pipeline">
+        <div class="pipe-stage"><div class="pipe-node done"></div><div class="pipe-stage-label">Sanctioned</div></div>
+        <div class="pipe-line done"></div>
+        <div class="pipe-stage"><div class="pipe-node done"></div><div class="pipe-stage-label">Allocated</div></div>
+        <div class="pipe-line done"></div>
+        <div class="pipe-stage"><div class="pipe-node active"></div><div class="pipe-stage-label">Released</div></div>
+        <div class="pipe-line"></div>
+        <div class="pipe-stage"><div class="pipe-node"></div><div class="pipe-stage-label">Utilized</div></div>
+        <div class="pipe-line"></div>
+        <div class="pipe-stage"><div class="pipe-node"></div><div class="pipe-stage-label">Audited</div></div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="glass-card-static overflow-hidden" style="padding:0">
+      <div class="overflow-x-auto">
+        <table class="data-table" id="fullDisbTable">
+          <thead><tr><th>TX ID</th><th>Scheme</th><th>Stage</th><th>Amount</th><th>Recipient DID</th><th>Oracle</th><th>Status</th><th>Time</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- New Disbursement Modal -->
+    <div class="modal-overlay" id="modal" style="display:none" onclick="if(event.target===this)closeModal()">
+      <div class="modal-content p-6">
+        <div class="flex items-center justify-between mb-5">
+          <h2 class="font-bold text-lg">New Disbursement</h2>
+          <button onclick="closeModal()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:4px">
+            <svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <form onsubmit="handleSubmit(event)">
+          <div class="modal-field">
+            <label>Scheme</label>
+            <select class="input-base" id="mScheme" required>
+              <option value="">Select scheme…</option>
+            </select>
+          </div>
+          <div class="modal-field">
+            <label>Recipient DID</label>
+            <input class="input-base" id="mRecipient" placeholder="did:polygonid:…" required>
+          </div>
+          <div class="modal-field">
+            <label>Amount (₹)</label>
+            <input class="input-base" type="number" id="mAmount" placeholder="2000" required>
+          </div>
+          <div class="modal-field">
+            <label>Supporting Document Hash</label>
+            <input class="input-base font-mono" id="mDocHash" placeholder="0x…">
+          </div>
+          <div id="txResult" class="mb-4"></div>
+          <button type="submit" class="btn-primary w-full justify-center" id="submitBtn">Submit Disbursement</button>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <script src="../js/data.js"></script>
+  <script src="../js/auth.js"></script>
+  <script src="../js/sidebar.js"></script>
+  <script>
+    const P = PRAMAANIK;
+    P.initPage('admin','disbursements');
+
+    function oracleIcon(pass) {
+      return pass
+        ? `<svg class="icon icon-sm" viewBox="0 0 24 24" style="color:var(--accent-success)"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`
+        : `<svg class="icon icon-sm" viewBox="0 0 24 24" style="color:var(--accent-danger)"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`;
+    }
+    const bc = { active:"badge-active", flagged:"badge-flagged", frozen:"badge-frozen", pending:"badge-pending" };
+
+    document.querySelector('#fullDisbTable tbody').innerHTML = P.disbursements.map(d => `
+      <tr>
+        <td><span class="font-mono text-xs" style="color:var(--text-muted)">${d.id}</span></td>
+        <td class="text-sm">${d.scheme}</td>
+        <td><span class="text-xs px-2 py-1 rounded" style="background:rgba(99,102,241,0.08);color:var(--text-secondary)">${d.stage}</span></td>
+        <td class="font-semibold">${d.amount}</td>
+        <td class="text-xs font-mono truncate" style="max-width:180px;color:var(--text-muted)">${d.recipient}</td>
+        <td><div class="flex items-center gap-1">${oracleIcon(d.gst)}${oracleIcon(d.bank)}${oracleIcon(d.geo)}</div></td>
+        <td><span class="badge ${bc[d.status]||'badge-pending'}">${d.status}</span></td>
+        <td class="text-xs" style="color:var(--text-muted)">${d.time}</td>
+      </tr>
+    `).join('');
+
+    // Populate scheme select
+    const sel = document.getElementById('mScheme');
+    P.schemes.forEach(s => { const o = document.createElement('option'); o.value = s.name; o.textContent = s.name; sel.appendChild(o); });
+
+    function openModal() { document.getElementById('modal').style.display = 'flex'; }
+    window.openModal = openModal;
+    function closeModal() {
+      document.getElementById('modal').style.display = 'none';
+      document.getElementById('txResult').innerHTML = '';
+      document.getElementById('mScheme').selectedIndex = 0;
+      document.getElementById('mRecipient').value = '';
+      document.getElementById('mAmount').value = '';
+      document.getElementById('mDocHash').value = '';
+    }
+    window.closeModal = closeModal;
+
+    function renderTable() {
+      document.querySelector('#fullDisbTable tbody').innerHTML = P.disbursements.map(function(d) {
+        return '<tr><td><span class="font-mono text-xs" style="color:var(--text-muted)">' + d.id + '</span></td><td class="text-sm">' + d.scheme + '</td><td><span class="text-xs px-2 py-1 rounded" style="background:rgba(99,102,241,0.08);color:var(--text-secondary)">' + d.stage + '</span></td><td class="font-semibold">' + d.amount + '</td><td class="text-xs font-mono truncate" style="max-width:180px;color:var(--text-muted)">' + d.recipient + '</td><td><div class="flex items-center gap-1">' + oracleIcon(d.gst) + oracleIcon(d.bank) + oracleIcon(d.geo) + '</div></td><td><span class="badge ' + (bc[d.status]||'badge-pending') + '">' + d.status + '</span></td><td class="text-xs" style="color:var(--text-muted)">' + d.time + '</td></tr>';
+      }).join('');
+    }
+
+    function handleSubmit(e) {
+      e.preventDefault();
+      var btn = document.getElementById('submitBtn');
+      var res = document.getElementById('txResult');
+      btn.disabled = true; btn.textContent = 'Submitting…';
+
+      setTimeout(function() {
+        var txHash = '0x' + Array.from({length:16}, function() { return Math.floor(Math.random()*16).toString(16); }).join('');
+        var shortHash = txHash.slice(0,6) + '...' + txHash.slice(-4);
+        var amt = parseInt(document.getElementById('mAmount').value) || 0;
+        var amtStr = amt >= 10000000 ? '₹' + (amt/10000000).toFixed(1) + ' Cr' : amt >= 100000 ? '₹' + (amt/100000).toFixed(1) + ' L' : '₹' + amt.toLocaleString('en-IN');
+
+        // Push new disbursement to data
+        P.disbursements.unshift({
+          id: shortHash,
+          scheme: document.getElementById('mScheme').value,
+          stage: 'Sanctioned',
+          amount: amtStr,
+          recipient: document.getElementById('mRecipient').value || 'did:polygonid:demo',
+          time: 'just now',
+          status: 'pending',
+          gst: false, bank: false, geo: false
+        });
+        P.stats.disbursementCount++;
+
+        renderTable();
+        res.innerHTML = '<div class="p-3 rounded-lg text-sm" style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);color:var(--accent-success)">✓ Disbursement created<br><span class="font-mono text-xs">' + shortHash + '</span></div>';
+        btn.disabled = false; btn.textContent = 'Submit Disbursement';
+        setTimeout(closeModal, 1500);
+      }, 1200);
+    }
+    window.handleSubmit = handleSubmit;
+  </script>
+</body>
+</html>

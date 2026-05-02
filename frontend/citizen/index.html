@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>PRAMAANIK · Citizen Dashboard</title>
+  <meta name="description" content="PRAMAANIK Public Fund Transparency Dashboard">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡</text></svg>">
+  <link rel="stylesheet" href="../css/style.css">
+  <style>
+    .action-card{cursor:pointer;transition:all .3s ease;text-align:center;text-decoration:none;display:block}
+    .action-card:hover{transform:translateY(-4px);border-color:var(--border-glow);box-shadow:var(--shadow-glow)}
+    .action-icon{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;transition:transform .3s}
+    .action-card:hover .action-icon{transform:scale(1.1)}
+    .tab-bar{display:flex;gap:4px;padding:4px;border-radius:10px;background:rgba(99,102,241,0.04);border:1px solid var(--border-subtle)}
+    .tab-bar button{padding:6px 14px;border:none;background:none;color:var(--text-muted);font-size:.75rem;font-weight:600;border-radius:8px;cursor:pointer;font-family:inherit;transition:.2s}
+    .tab-bar button.active{background:var(--accent-success);color:#fff}
+    .search-box{position:relative}
+    .search-box input{padding-left:36px}
+    .search-box svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-muted)}
+    @keyframes countUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    .count-anim{animation:countUp .4s ease-out both}
+    @media(max-width:768px){.action-grid{grid-template-columns:1fr!important}.stat-grid{grid-template-columns:repeat(2,1fr)!important}}
+  </style>
+</head>
+<body class="bg-grid">
+  <div id="mobileHeader"></div>
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="flex items-center justify-between mb-8" style="flex-wrap:wrap;gap:16px">
+      <div>
+        <h1 class="text-2xl font-bold mb-1">Citizen Dashboard</h1>
+        <p class="text-sm" style="color:var(--text-muted)">Track public funds · File grievances · Verify proofs</p>
+      </div>
+      <span class="badge badge-active">Open Ledger</span>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid gap-5 mb-8 stat-grid" style="grid-template-columns:repeat(4,1fr)" id="citizenStats"></div>
+
+    <!-- Quick Actions -->
+    <div class="grid gap-5 mb-8 action-grid" style="grid-template-columns:repeat(3,1fr)">
+      <a href="trace.html" class="glass-card action-card p-6">
+        <div class="action-icon" style="background:rgba(99,102,241,0.1)"><svg class="icon icon-xl" viewBox="0 0 24 24" style="color:var(--accent-primary);width:24px;height:24px"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+        <div class="font-bold mb-1">Trace Funds</div>
+        <p class="text-xs" style="color:var(--text-muted)">Follow any rupee from Treasury to last mile</p>
+      </a>
+      <a href="grievances.html" class="glass-card action-card p-6">
+        <div class="action-icon" style="background:rgba(245,158,11,0.1)"><svg class="icon icon-xl" viewBox="0 0 24 24" style="color:var(--accent-warning);width:24px;height:24px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+        <div class="font-bold mb-1">File Grievance</div>
+        <p class="text-xs" style="color:var(--text-muted)">Submit immutable on-chain complaints</p>
+      </a>
+      <a href="verify.html" class="glass-card action-card p-6">
+        <div class="action-icon" style="background:rgba(16,185,129,0.1)"><svg class="icon icon-xl" viewBox="0 0 24 24" style="color:var(--accent-success);width:24px;height:24px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+        <div class="font-bold mb-1">Verify Proof</div>
+        <p class="text-xs" style="color:var(--text-muted)">Check any zkML anomaly detection proof</p>
+      </a>
+    </div>
+
+    <!-- Tabs + Search + Table -->
+    <div class="flex items-center justify-between mb-4" style="flex-wrap:wrap;gap:12px">
+      <div class="tab-bar" id="tabBar">
+        <button class="active" onclick="filterT('all',this)">All</button>
+        <button onclick="filterT('active',this)">Active</button>
+        <button onclick="filterT('flagged',this)">Flagged</button>
+        <button onclick="filterT('pending',this)">Pending</button>
+      </div>
+      <div class="search-box">
+        <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input class="input-base" style="width:240px;padding-left:36px;font-size:.8rem" placeholder="Search…" id="sInput" oninput="searchT()">
+      </div>
+    </div>
+    <div class="glass-card-static overflow-hidden mb-8" style="padding:0">
+      <div class="overflow-x-auto" style="max-height:400px;overflow-y:auto">
+        <table class="data-table" id="pubTable"><thead><tr><th>TX</th><th>Scheme</th><th>Amount</th><th>Status</th><th>Time</th></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+
+    <!-- Grievances Preview -->
+    <div class="glass-card-static p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="font-bold text-sm">Recent Grievances</h2>
+        <a href="grievances.html" class="text-xs font-semibold" style="color:var(--accent-primary)">View all →</a>
+      </div>
+      <div class="space-y-3" id="grvPreview"></div>
+    </div>
+  </main>
+  <script src="../js/data.js"></script>
+  <script src="../js/auth.js"></script>
+  <script src="../js/sidebar.js"></script>
+  <script>
+const P = PRAMAANIK;
+P.initPage('citizen','dashboard');
+
+// Stats with animation
+function animVal(el,end,dur=800){const st=performance.now();function u(n){const p=Math.min((n-st)/dur,1);el.textContent=Math.floor((1-Math.pow(1-p,3))*end).toLocaleString();if(p<1)requestAnimationFrame(u);}requestAnimationFrame(u);}
+
+const stats=[
+  {label:'Schemes Tracked',value:P.stats.activeSchemes,color:'var(--accent-primary)',icon:'fileText'},
+  {label:'Total Sanctioned',value:P.stats.totalSanctioned,color:'var(--accent-secondary)',icon:'rupee',str:true},
+  {label:'Disbursements',value:P.stats.disbursementCount,color:'var(--accent-success)',icon:'activity'},
+  {label:'Open Grievances',value:P.grievances.filter(g=>g.status==='open').length,color:'var(--accent-warning)',icon:'messageSquare'},
+];
+document.getElementById('citizenStats').innerHTML = stats.map((s,i) => `
+  <div class="stat-card count-anim" style="animation-delay:${i*80}ms">
+    <div class="flex items-center justify-between mb-1"><span class="stat-label">${s.label}</span><span style="color:${s.color}">${P.icon(s.icon)}</span></div>
+    <div class="stat-value" style="color:${s.color}" id="cs${i}">${s.str?s.value:'0'}</div>
+  </div>
+`).join('');
+stats.forEach((s,i) => { if(!s.str) setTimeout(()=>animVal(document.getElementById('cs'+i),s.value),i*100+200); });
+
+// Table
+let cf='all',st='';
+const bc={active:'badge-active',flagged:'badge-flagged',frozen:'badge-frozen',pending:'badge-pending'};
+function renderT(){
+  let d=P.disbursements;
+  if(cf!=='all')d=d.filter(x=>x.status===cf);
+  if(st){const q=st.toLowerCase();d=d.filter(x=>x.id.toLowerCase().includes(q)||x.scheme.toLowerCase().includes(q));}
+  document.querySelector('#pubTable tbody').innerHTML=d.map(x=>`
+    <tr style="cursor:pointer" onclick="window.location.href='trace.html?tx='+encodeURIComponent('${x.id}')">
+      <td><span class="font-mono text-xs" style="color:var(--text-muted)">${x.id}</span></td>
+      <td class="text-xs">${x.scheme.length>35?x.scheme.slice(0,33)+'…':x.scheme}</td>
+      <td class="font-semibold text-sm">${x.amount}</td>
+      <td><span class="badge ${bc[x.status]||'badge-pending'}">${x.status}</span></td>
+      <td class="text-xs" style="color:var(--text-muted)">${x.time}</td>
+    </tr>
+  `).join('')||`<tr><td colspan="5" class="text-center p-8" style="color:var(--text-muted)">No results</td></tr>`;
+}
+function filterT(f,btn){cf=f;document.querySelectorAll('#tabBar button').forEach(b=>b.classList.remove('active'));if(btn)btn.classList.add('active');renderT();}
+function searchT(){st=document.getElementById('sInput').value;renderT();}
+renderT();
+
+// Grievances preview
+const gs={open:'badge-pending',investigating:'badge-frozen',resolved:'badge-active'};
+document.getElementById('grvPreview').innerHTML = P.grievances.slice(0,3).map(g=>`
+  <div class="p-4 rounded-lg" style="border:1px solid var(--border-subtle);background:rgba(99,102,241,0.02)">
+    <div class="flex items-center justify-between mb-2"><span class="font-semibold text-sm">${g.title}</span><span class="badge ${gs[g.status]}">${g.status}</span></div>
+    <p class="text-xs mb-2" style="color:var(--text-secondary)">${g.description.slice(0,120)}…</p>
+    <div class="flex items-center justify-between text-xs" style="color:var(--text-muted)"><span>${g.scheme}</span><span>${g.responseCount} response${g.responseCount!==1?'s':''}</span></div>
+  </div>
+`).join('');
+  </script>
+</body>
+</html>

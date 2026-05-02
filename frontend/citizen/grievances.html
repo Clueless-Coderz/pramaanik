@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>PRAMAANIK · Grievances</title>
+  <meta name="description" content="PRAMAANIK Public Fund Transparency Dashboard">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡</text></svg>">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body class="bg-grid">
+  <div id="mobileHeader"></div>
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <div class="flex items-center justify-between mb-6" style="flex-wrap:wrap;gap:16px">
+      <div>
+        <h1 class="text-2xl font-bold mb-1">On-Chain Grievances</h1>
+        <p class="text-sm" style="color:var(--text-muted)">Immutable, tamper-proof grievance records stored on Hyperledger Besu</p>
+      </div>
+      <button class="btn-primary btn-sm" onclick="openModal()">+ File Grievance</button>
+    </div>
+
+    <div class="space-y-4" id="grievanceList"></div>
+
+    <!-- Modal -->
+    <div class="modal-overlay" id="grvModal" style="display:none" onclick="if(event.target===this)closeModal()">
+      <div class="modal-content p-6">
+        <div class="flex items-center justify-between mb-5">
+          <h2 class="font-bold text-lg">File New Grievance</h2>
+          <button onclick="closeModal()" style="background:none;border:none;color:var(--text-muted);cursor:pointer">
+            <svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <form onsubmit="submitGrievance(event)">
+          <div style="margin-bottom:16px">
+            <label style="display:block;font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Scheme</label>
+            <select class="input-base" id="gScheme" required>
+              <option value="">Select scheme…</option>
+            </select>
+          </div>
+          <div style="margin-bottom:16px">
+            <label style="display:block;font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Title</label>
+            <input class="input-base" id="gTitle" placeholder="Brief description of issue" required>
+          </div>
+          <div style="margin-bottom:16px">
+            <label style="display:block;font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Description</label>
+            <textarea class="input-base" id="gDesc" placeholder="Detailed description including reference numbers…" required></textarea>
+          </div>
+          <div id="gResult" style="margin-bottom:16px"></div>
+          <button type="submit" class="btn-primary w-full justify-center">Submit On-Chain</button>
+        </form>
+      </div>
+    </div>
+  </main>
+  <script src="../js/data.js"></script>
+  <script src="../js/auth.js"></script>
+  <script src="../js/sidebar.js"></script>
+  <script>
+    const P = PRAMAANIK;
+    P.initPage('citizen','grievances');
+    const statusBadge = { open:'badge-pending', investigating:'badge-frozen', resolved:'badge-active' };
+
+    function render() {
+      document.getElementById('grievanceList').innerHTML = P.grievances.map(g => `
+        <div class="glass-card p-6">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <div class="font-bold">${g.title}</div>
+              <div class="text-xs" style="color:var(--text-muted)">${g.id} · Filed ${g.filedAt}</div>
+            </div>
+            <span class="badge ${statusBadge[g.status]||'badge-pending'}">${g.status}</span>
+          </div>
+          <div class="text-xs mb-2" style="color:var(--accent-primary)">${g.scheme}</div>
+          <p class="text-sm mb-3" style="color:var(--text-secondary);line-height:1.6">${g.description}</p>
+          <div class="flex items-center justify-between text-xs" style="color:var(--text-muted)">
+            <span>Filed by: <span class="font-mono">${g.filer}</span></span>
+            <span>${g.responseCount} response${g.responseCount!==1?'s':''}</span>
+          </div>
+          <div class="mt-3 p-2 rounded" style="background:rgba(99,102,241,0.04)">
+            <span class="text-xs" style="color:var(--text-muted)">TX: </span>
+            <span class="text-xs font-mono break-all" style="color:var(--text-secondary)">${g.txHash}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+    render();
+
+    // Populate scheme dropdown
+    const sel = document.getElementById('gScheme');
+    P.schemes.forEach(s => { const o = document.createElement('option'); o.value = s.name; o.textContent = s.name; sel.appendChild(o); });
+
+    function openModal() { document.getElementById('grvModal').style.display = 'flex'; }
+    window.openModal = openModal;
+    function closeModal() {
+      document.getElementById('grvModal').style.display = 'none';
+      // Clear form fields
+      document.getElementById('gScheme').selectedIndex = 0;
+      document.getElementById('gTitle').value = '';
+      document.getElementById('gDesc').value = '';
+      document.getElementById('gResult').innerHTML = '';
+    }
+    window.closeModal = closeModal;
+
+    function submitGrievance(e) {
+      e.preventDefault();
+      var session = PRAMAANIK.auth.getSession();
+      var txHash = '0x' + Array.from({length:32}, function() { return Math.floor(Math.random()*16).toString(16); }).join('');
+      P.grievances.unshift({
+        id: 'GRV-' + String(P.grievances.length+1).padStart(3,'0'),
+        scheme: document.getElementById('gScheme').value,
+        title: document.getElementById('gTitle').value,
+        filer: session ? session.did : 'did:polygonid:citizen:demo',
+        description: document.getElementById('gDesc').value,
+        status: 'open',
+        filedAt: new Date().toISOString().split('T')[0],
+        lastUpdated: new Date().toISOString().split('T')[0],
+        txHash: txHash, responseCount: 0
+      });
+      document.getElementById('gResult').innerHTML = '<div class="p-3 rounded" style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2)"><span class="text-sm" style="color:var(--accent-success)">✓ Grievance submitted on-chain</span><br><span class="text-xs font-mono" style="color:var(--text-muted)">TX: ' + txHash + '</span></div>';
+      render();
+      setTimeout(closeModal, 1500);
+    }
+    window.submitGrievance = submitGrievance;
+  </script>
+</body>
+</html>

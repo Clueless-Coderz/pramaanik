@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>PRAMAANIK · zkML Proofs</title>
+  <meta name="description" content="PRAMAANIK Public Fund Transparency Dashboard">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡</text></svg>">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body class="bg-grid">
+  <div id="mobileHeader"></div>
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <h1 class="text-2xl font-bold mb-1">zkML Proof Registry</h1>
+    <p class="text-sm mb-6" style="color:var(--text-muted)">EZKL/Halo2 proof artifacts submitted by the anomaly oracle</p>
+    <div class="glass-card-static overflow-hidden" style="padding:0">
+      <table class="data-table">
+        <thead><tr><th>Flag</th><th>Model</th><th>Risk</th><th>Proof Status</th><th>Submitted</th></tr></thead>
+        <tbody id="proofTable"></tbody>
+      </table>
+    </div>
+  </main>
+  <script src="../js/data.js"></script>
+  <script src="../js/auth.js"></script>
+  <script src="../js/sidebar.js"></script>
+  <script>
+    PRAMAANIK.initPage('auditor','proofs');
+    document.getElementById('proofTable').innerHTML = PRAMAANIK.flags.map(f => `
+      <tr>
+        <td><span class="font-mono text-xs" style="color:var(--accent-primary)">${f.id}</span></td>
+        <td class="text-sm font-mono">${f.model}</td>
+        <td><span class="font-mono font-semibold" style="color:${f.risk>=9000?'var(--accent-danger)':f.risk>=7000?'var(--accent-warning)':'var(--accent-primary)'}">${(f.risk/100).toFixed(0)}%</span></td>
+        <td>${f.proofVerified
+          ?'<span class="badge badge-active">Verified</span>'
+          :'<span class="badge badge-pending">Pending</span>'}</td>
+        <td class="text-xs" style="color:var(--text-muted)">${f.time}</td>
+      </tr>
+    `).join('');
+  </script>
+</body>
+</html>

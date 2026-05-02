@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>PRAMAANIK · Verify Proof</title>
+  <meta name="description" content="PRAMAANIK Public Fund Transparency Dashboard">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡</text></svg>">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body class="bg-grid">
+  <div id="mobileHeader"></div>
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <h1 class="text-2xl font-bold mb-1">Verify zkML Proof</h1>
+    <p class="text-sm mb-6" style="color:var(--text-muted)">Independently verify any anomaly detection proof using on-chain verification</p>
+    <div class="glass-card-static p-6" style="max-width:600px">
+      <div style="margin-bottom:16px">
+        <label style="display:block;font-size:.75rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Proof Hash</label>
+        <input class="input-base font-mono" id="proofHash" placeholder="0x7c2f...a3d1" value="0x7c2f...a3d1">
+      </div>
+      <button class="btn-primary w-full justify-center mb-4" onclick="verifyProof()">Verify On-Chain</button>
+      <div id="verifyResult"></div>
+    </div>
+  </main>
+  <script src="../js/data.js"></script>
+  <script src="../js/auth.js"></script>
+  <script src="../js/sidebar.js"></script>
+  <script>
+    PRAMAANIK.initPage('citizen','verify');
+    function verifyProof() {
+      var hash = document.getElementById('proofHash').value.trim().toLowerCase();
+      // Match on truncated txId, full hash, or flag ID
+      var flag = PRAMAANIK.flags.find(function(f) {
+        return f.txId.toLowerCase() === hash ||
+               f.id.toLowerCase() === hash ||
+               f.txId.toLowerCase().indexOf(hash) >= 0 ||
+               hash.indexOf(f.txId.replace('...','').toLowerCase()) >= 0;
+      });
+      var res = document.getElementById('verifyResult');
+      if (flag && flag.proofVerified) {
+        res.innerHTML = `
+          <div class="p-4 rounded-lg" style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2)">
+            <div class="flex items-center gap-2 mb-2">
+              <svg class="icon" viewBox="0 0 24 24" style="color:var(--accent-success)"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              <span class="font-bold" style="color:var(--accent-success)">Proof Verified ✓</span>
+            </div>
+            <div class="text-sm mb-2" style="color:var(--text-secondary)">${flag.explanation}</div>
+            <div class="grid grid-2 gap-3 mt-3">
+              <div class="p-2 rounded" style="background:rgba(99,102,241,0.04)"><div class="text-xs" style="color:var(--text-muted)">Model</div><div class="text-sm font-mono">${flag.model}</div></div>
+              <div class="p-2 rounded" style="background:rgba(99,102,241,0.04)"><div class="text-xs" style="color:var(--text-muted)">Risk Score</div><div class="text-sm font-mono">${(flag.risk/100).toFixed(0)}%</div></div>
+            </div>
+          </div>`;
+      } else {
+        res.innerHTML = `<div class="p-4 rounded-lg" style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);color:var(--accent-warning)">
+          <span class="font-bold">Proof not found or pending verification</span><br>
+          <span class="text-sm">Enter a valid proof hash from the anomaly flags to verify.</span>
+        </div>`;
+      }
+    }
+  </script>
+</body>
+</html>

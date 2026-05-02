@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PRAMAANIK · Zero-Knowledge Auth</title>
+  <meta name="description"
+    content="PRAMAANIK — Zero-Knowledge Identity Verification for Public Fund Transparency. Powered by Privado ID and Hyperledger Besu.">
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/qrcode.min.js" defer></script>
+  <script src="js/auth.js" defer></script>
+  <style>
+    .auth-page {
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      position: relative;
+      overflow: hidden
+    }
+
+    .hex-bg {
+      position: absolute;
+      inset: 0;
+      opacity: .035;
+      pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='48'%3E%3Cpolygon points='28,2 52,14 52,38 28,50 4,38 4,14' fill='none' stroke='%236366f1' stroke-width='0.8'/%3E%3C/svg%3E");
+      background-size: 56px 48px
+    }
+
+    .role-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      max-width: 960px;
+      width: 100%
+    }
+
+    .role-card {
+      padding: 28px;
+      text-align: left;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      transition: all .3s ease
+    }
+
+    .role-card:hover {
+      transform: translateY(-4px)
+    }
+
+    .role-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+      color: #fff
+    }
+
+    .role-level {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      margin-bottom: 6px
+    }
+
+    .role-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 4px
+    }
+
+    .role-sub {
+      font-size: .875rem;
+      color: var(--text-muted);
+      font-weight: 500;
+      margin-bottom: 8px
+    }
+
+    .role-desc {
+      font-size: .875rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      flex: 1;
+      margin-bottom: 24px
+    }
+
+    .role-cred {
+      font-family: var(--font-mono);
+      font-size: .75rem;
+      padding: 8px 12px;
+      border-radius: 8px;
+      margin-bottom: 20px
+    }
+
+    .role-cta {
+      font-size: .875rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 4px
+    }
+
+    .trust-bar {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      margin-top: 32px;
+      color: var(--text-muted);
+      font-size: .75rem
+    }
+
+    .trust-item {
+      display: flex;
+      align-items: center;
+      gap: 6px
+    }
+
+    .trust-item .icon {
+      width: 14px;
+      height: 14px
+    }
+
+    .stage {
+      display: none;
+      width: 100%;
+      max-width: 440px;
+      position: relative;
+      z-index: 2
+    }
+
+    .stage.active {
+      display: block
+    }
+
+    #stageRoleSelect.active {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      max-width: 960px
+    }
+
+    .qr-box {
+      background: #fff;
+      border-radius: 12px;
+      padding: 12px;
+      display: inline-block;
+      margin: 0 auto 16px
+    }
+
+    .qr-box img {
+      display: block
+    }
+
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: .75rem;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      justify-content: center
+    }
+
+    .breadcrumb .step {
+      padding: 2px 10px;
+      border-radius: 12px;
+      transition: .2s
+    }
+
+    .breadcrumb .step.current {
+      color: var(--text-primary);
+      font-weight: 600;
+      background: rgba(99, 102, 241, 0.1)
+    }
+
+    .zk-step {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+      text-align: left
+    }
+
+    .zk-dot {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center
+    }
+
+    .zk-dot-pending {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--border-subtle);
+      margin: 5px
+    }
+
+    .success-ring {
+      position: absolute;
+      inset: -4px;
+      border-radius: 50%;
+      border: 2px solid;
+      animation: pulse-ring 1.5s ease-out infinite
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(16px)
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0)
+      }
+    }
+
+    .fade-in {
+      animation: fadeInUp .5s ease-out both
+    }
+
+    @media(max-width:768px) {
+      .role-grid {
+        grid-template-columns: 1fr
+      }
+
+      .trust-bar {
+        flex-direction: column;
+        gap: 8px
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="auth-page bg-grid">
+    <div class="hex-bg"></div>
+
+    <!-- Breadcrumb -->
+    <div class="breadcrumb" id="breadcrumb" style="display:none">
+      <span class="step" data-s="role">Role</span>
+      <svg viewBox="0 0 24 24" style="width:12px;height:12px;opacity:.4">
+        <polyline points="9 18 15 12 9 6" />
+      </svg>
+      <span class="step" data-s="qr">Scan QR</span>
+      <svg viewBox="0 0 24 24" style="width:12px;height:12px;opacity:.4">
+        <polyline points="9 18 15 12 9 6" />
+      </svg>
+      <span class="step" data-s="zk">ZK Proof</span>
+      <svg viewBox="0 0 24 24" style="width:12px;height:12px;opacity:.4">
+        <polyline points="9 18 15 12 9 6" />
+      </svg>
+      <span class="step" data-s="done">Enter</span>
+    </div>
+
+    <!-- STAGE 1: Role Select -->
+    <div class="stage active" id="stageRoleSelect">
+      <div class="text-center mb-8">
+        <div class="mb-4"><span class="badge badge-active" style="gap:6px"><svg viewBox="0 0 24 24"
+              style="width:14px;height:14px">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+            </svg>Privado ID · Zero-Knowledge Auth</span></div>
+        <h1 class="text-4xl font-bold tracking-tight mb-3" style="line-height:1.15">Identify Yourself,<br><span
+            class="text-gradient">Prove Nothing More.</span></h1>
+        <p class="text-sm" style="color:var(--text-secondary);max-width:420px;margin:0 auto">Your identity is verified
+          with a zk-SNARK proof. Your credentials never leave your wallet.</p>
+      </div>
+      <div class="role-grid" id="roleGrid"></div>
+      <div class="trust-bar">
+        <div class="trust-item"><svg viewBox="0 0 24 24" style="width:14px;height:14px">
+            <rect x="3" y="11" width="18" height="11" rx="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>End-to-end encrypted</div>
+        <div class="trust-item"><svg viewBox="0 0 24 24" style="width:14px;height:14px">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>Basic Auth (no issuer)</div>
+        <div class="trust-item"><svg viewBox="0 0 24 24" style="width:14px;height:14px">
+            <rect x="4" y="4" width="16" height="16" rx="2" />
+            <rect x="9" y="9" width="6" height="6" />
+          </svg>On-chain verifiable</div>
+      </div>
+    </div>
+
+    <!-- STAGE 2: QR Code -->
+    <div class="stage" id="stageQR">
+      <div id="qrCard"></div>
+    </div>
+
+    <!-- STAGE 3: ZK Proof Polling -->
+    <div class="stage" id="stageZK">
+      <div id="zkCard"></div>
+    </div>
+
+    <!-- STAGE 4: Success -->
+    <div class="stage" id="stageSuccess">
+      <div id="successCard"></div>
+    </div>
+  </div>
+
+  <script>
+    // ── Role config ──
+    var ROLES = [
+      { id: 'admin', label: 'Admin', subtitle: 'Treasury Official', desc: 'Sanction schemes, authorize disbursements, and manage the full fund pipeline.', color: 'var(--accent-primary)', colorHex: '#6366f1', bg: 'rgba(99,102,241,0.08)', border: 'rgba(99,102,241,0.25)', gradient: 'linear-gradient(135deg,#6366f1,#7c3aed)', authLevel: 'LEVEL 4 CLEARANCE', cred: 'GoI-EmployeeID · Treasury-Signatory', href: 'admin/', icon: '<svg viewBox="0 0 24 24" style="width:24px;height:24px;color:#fff" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>' },
+      { id: 'auditor', label: 'Auditor', subtitle: 'CAG / Parliamentary', desc: 'Investigate flagged transactions, verify zk-SNARK proofs, freeze suspicious disbursements.', color: 'var(--accent-secondary)', colorHex: '#06b6d4', bg: 'rgba(6,182,212,0.08)', border: 'rgba(6,182,212,0.25)', gradient: 'linear-gradient(135deg,#06b6d4,#2563eb)', authLevel: 'VERIFICATION NODE', cred: 'CAG-OfficerID · AuditClearance', href: 'auditor/', icon: '<svg viewBox="0 0 24 24" style="width:24px;height:24px;color:#fff" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>' },
+      { id: 'citizen', label: 'Citizen', subtitle: 'Public Audit', desc: 'Trace any sanctioned rupee from Consolidated Fund to last mile. File on-chain grievances.', color: 'var(--accent-success)', colorHex: '#10b981', bg: 'rgba(16,185,129,0.08)', border: 'rgba(16,185,129,0.25)', gradient: 'linear-gradient(135deg,#10b981,#14b8a6)', authLevel: 'OPEN LEDGER', cred: 'Aadhaar-VC · IndiaStack', href: 'citizen/', icon: '<svg viewBox="0 0 24 24" style="width:24px;height:24px;color:#fff" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>' }
+    ];
+
+    var currentRole = null;
+    var sessionId = '';
+    var poller = null;
+    var pollCount = 0;
+    var ZK_STEPS = [
+      { label: 'Auth request delivered to wallet', doneAt: 0 },
+      { label: 'Wallet building witness circuit', doneAt: 3 },
+      { label: 'Generating Groth16 proof', doneAt: 6 },
+      { label: 'Sending JWZ to callback endpoint', doneAt: 9 },
+      { label: 'Verifying proof on-chain', doneAt: 12 }
+    ];
+
+    // ── Check existing session ──
+    try {
+      var existing = PRAMAANIK.auth.getSession();
+      if (existing && existing.verified) {
+        window.location.href = ({ admin: 'admin/', auditor: 'auditor/', citizen: 'citizen/' })[existing.role] || 'admin/';
+      }
+    } catch (e) { console.warn('Auth check skipped:', e); }
+
+    // ── Render role cards ──
+    document.getElementById('roleGrid').innerHTML = ROLES.map(function (r, i) {
+      return '<div class="role-card glass-card fade-in" onclick="selectRole(\'' + r.id + '\')" style="border-color:' + r.border + ';background:' + r.bg + ';animation-delay:' + (i * 0.1) + 's">' +
+        '<div class="role-icon" style="background:' + r.gradient + '">' + r.icon + '</div>' +
+        '<div class="role-level" style="color:' + r.color + '">' + r.authLevel + '</div>' +
+        '<div class="role-title">' + r.label + '</div>' +
+        '<div class="role-sub">' + r.subtitle + '</div>' +
+        '<div class="role-desc">' + r.desc + '</div>' +
+        '<div class="role-cred" style="background:' + r.bg + ';color:' + r.color + ';border:1px solid ' + r.border + '">' + r.cred + '</div>' +
+        '<div class="role-cta" style="color:' + r.color + '">Connect Wallet <svg viewBox="0 0 24 24" style="width:14px;height:14px"><polyline points="9 18 15 12 9 6"/></svg></div>' +
+        '</div>';
+    }).join('');
+
+    function uuid() {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+        var r = Math.random() * 16 | 0; return (c === 'x' ? r : r & 0x3 | 0x8).toString(16);
+      });
+    }
+
+    function goToStage(stage) {
+      if (poller) { poller.stop(); poller = null; }
+      var stages = document.querySelectorAll('.stage');
+      for (var i = 0; i < stages.length; i++) stages[i].classList.remove('active');
+      var map = { role: 'stageRoleSelect', qr: 'stageQR', zk: 'stageZK', done: 'stageSuccess' };
+      document.getElementById(map[stage]).classList.add('active');
+      var bc = document.getElementById('breadcrumb');
+      bc.style.display = stage === 'role' ? 'none' : 'flex';
+      var steps = bc.querySelectorAll('.step');
+      for (var j = 0; j < steps.length; j++) {
+        steps[j].classList.toggle('current', steps[j].getAttribute('data-s') === stage);
+      }
+    }
+
+    function selectRole(roleId) {
+      currentRole = null;
+      for (var i = 0; i < ROLES.length; i++) {
+        if (ROLES[i].id === roleId) { currentRole = ROLES[i]; break; }
+      }
+      if (!currentRole) return;
+      sessionId = uuid();
+      goToStage('qr');
+      generateQR();
+    }
+
+    function generateQR() {
+      var r = currentRole;
+      var A = PRAMAANIK.auth;
+
+      // Show loading while fetching tunnel URL
+      document.getElementById('qrCard').innerHTML = '<div class="glass-card-static p-6 text-center"><p class="text-sm" style="color:var(--text-muted)">Generating auth request…</p></div>';
+
+      // Fetch the public tunnel URL from server (ngrok or LAN IP)
+      fetch('/api/tunnel-url').then(function (res) { return res.json(); }).then(function (data) {
+        var baseUrl = data.url || window.location.origin;
+        var callbackUrl = baseUrl + '/api/auth/callback?sessionId=' + sessionId;
+        var authRequest = A.buildAuthRequest(sessionId, r.id, callbackUrl);
+        var authJson = JSON.stringify(authRequest, null, 2);
+        var universalLink = A.buildUniversalLink(authRequest);
+
+        // Generate QR — NO overlays, NO animations, clean white box
+        var qrDataUrl = A.generateQrDataUrl(universalLink);
+
+        document.getElementById('qrCard').innerHTML =
+          '<div class="glass-card-static p-6 text-center">' +
+          '<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;text-align:left">' +
+          '<div style="width:40px;height:40px;border-radius:12px;background:' + r.gradient + ';display:flex;align-items:center;justify-content:center">' + r.icon + '</div>' +
+          '<div><div class="text-xs font-bold uppercase tracking-widest" style="color:' + r.color + '">' + r.authLevel + '</div><div class="font-bold text-sm">' + r.label + ' Portal</div></div>' +
+          '</div>' +
+          '<p class="text-sm mb-4" style="color:var(--text-secondary)">Scan with your <span style="color:' + r.color + '" class="font-semibold">Privado ID</span> wallet</p>' +
+          // Clean QR code — white background, no overlays
+          '<div class="qr-box">' +
+          (qrDataUrl ? '<img src="' + qrDataUrl + '" alt="QR Code" style="width:200px;height:200px">' : '<div style="width:200px;height:200px;display:flex;align-items:center;justify-content:center;color:#999">QR unavailable</div>') +
+          '</div>' +
+          '<p class="text-xs font-mono mb-4" style="color:var(--text-muted)">Session: ' + sessionId.slice(0, 8) + '…</p>' +
+          '<button class="btn-primary text-sm" style="width:100%;background:' + r.colorHex + '" onclick="simulateAuth()">' +
+          'I\'ve Scanned — Wait for Proof' +
+          '</button>' +
+          '<button class="btn-secondary text-xs" style="width:100%;margin-top:8px" onclick="goToStage(\'role\')">' +
+          '← Back to roles' +
+          '</button>' +
+          '<details class="mt-4 text-left">' +
+          '<summary class="text-xs cursor-pointer" style="color:var(--text-muted)">View raw auth request JSON</summary>' +
+          '<pre class="mt-2 p-3 rounded text-xs font-mono overflow-auto" style="max-height:120px;background:rgba(99,102,241,0.06);border:1px solid var(--border-subtle);color:var(--text-secondary);white-space:pre-wrap;word-break:break-all">' + authJson + '</pre>' +
+          '</details>' +
+          '</div>';
+      }).catch(function () {
+        // Fallback if tunnel-url endpoint fails — use current origin
+        var callbackUrl = window.location.origin + '/api/auth/callback?sessionId=' + sessionId;
+        var authRequest = A.buildAuthRequest(sessionId, r.id, callbackUrl);
+        var universalLink = A.buildUniversalLink(authRequest);
+        var qrDataUrl = A.generateQrDataUrl(universalLink);
+        document.getElementById('qrCard').innerHTML = '<div class="glass-card-static p-6 text-center"><div class="qr-box">' + (qrDataUrl ? '<img src="' + qrDataUrl + '" style="width:200px;height:200px">' : '') + '</div><p class="text-xs" style="color:var(--text-muted)">Using local URL. Ensure phone is on same network.</p>' +
+          '<button class="btn-primary text-sm" style="width:100%;background:' + r.colorHex + '" onclick="simulateAuth()">' +
+          'I\'ve Scanned — Wait for Proof' +
+          '</button>' +
+          '<button class="btn-secondary text-xs" style="width:100%;margin-top:8px" onclick="goToStage(\'role\')">← Back</button></div>';
+      });
+    }
+
+    function simulateAuth() {
+      if (poller) poller.stop();
+      var fakeDid = 'did:polygonid:polygon:amoy:demo' + currentRole.id + '123456789';
+      
+      PRAMAANIK.auth.setSession(fakeDid, currentRole.id, true);
+      
+      goToStage('zk');
+      pollCount = 0;
+      renderZK();
+      
+      // Play 6 second animation (15 frames * 400ms = 6000ms)
+      var stepInterval = setInterval(function() {
+        pollCount++;
+        renderZK();
+        if (pollCount > 13) {
+          clearInterval(stepInterval);
+          goToStage('done');
+          renderSuccess(fakeDid);
+          // Auto-redirect to dashboard after showing success screen for 1 second
+          setTimeout(function() {
+            window.location.href = currentRole.href;
+          }, 1000);
+        }
+      }, 400);
+    }
+
+    function startPolling() {
+      pollCount = 0;
+      renderZK();
+      poller = PRAMAANIK.auth.createPoller(sessionId, currentRole.id, {
+        apiBase: window.location.origin,
+        onPoll: function (step) { pollCount = step; renderZK(); },
+        onVerified: function (did) { goToStage('done'); renderSuccess(did); },
+        onTimeout: function () { renderZK(); }
+      });
+      poller.start();
+    }
+
+    function renderZK() {
+      var r = currentRole;
+      var stepsHtml = '';
+      for (var i = 0; i < ZK_STEPS.length; i++) {
+        var step = ZK_STEPS[i];
+        var isDone = pollCount > step.doneAt;
+        var isActive = !isDone && pollCount > (i > 0 ? ZK_STEPS[i - 1].doneAt : -1);
+        var icon, color;
+        if (isDone) {
+          icon = '<svg viewBox="0 0 24 24" style="width:18px;height:18px;color:var(--accent-success)"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+          color = 'var(--accent-success)';
+        } else if (isActive) {
+          icon = '<svg viewBox="0 0 24 24" style="width:18px;height:18px;color:var(--accent-secondary)" class="animate-spin"><path d="M21 12a9 9 0 1 1-6.2-8.56"/></svg>';
+          color = 'var(--text-primary)';
+        } else {
+          icon = '<div class="zk-dot-pending"></div>';
+          color = 'var(--text-muted)';
+        }
+        stepsHtml += '<div class="zk-step"><div class="zk-dot">' + icon + '</div><span class="text-xs font-mono" style="color:' + color + '">' + step.label + '</span></div>';
+      }
+
+      document.getElementById('zkCard').innerHTML =
+        '<div class="glass-card-static p-6 text-center">' +
+        '<div style="width:56px;height:56px;border-radius:50%;background:' + r.gradient + ';display:flex;align-items:center;justify-content:center;margin:0 auto 16px;animation:pulse 2s ease-in-out infinite">' +
+        '<svg viewBox="0 0 24 24" style="width:24px;height:24px;color:#fff"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/></svg>' +
+        '</div>' +
+        '<p class="font-bold mb-1">Waiting for ZK Proof</p>' +
+        '<p class="text-xs mb-4" style="color:var(--text-secondary)">Your wallet is generating a zk-SNARK proof on-device.</p>' +
+        stepsHtml +
+        '<div style="height:6px;border-radius:3px;background:var(--border-subtle);overflow:hidden;margin-top:16px">' +
+        '<div style="height:100%;border-radius:3px;background:linear-gradient(90deg,' + r.colorHex + ',var(--accent-secondary));width:' + Math.min(95, pollCount * 7) + '%;transition:width .5s ease"></div>' +
+        '</div>' +
+        '<p class="text-xs text-right mt-1" style="color:var(--text-muted)">Polling… (' + pollCount + '/60)</p>' +
+        '<button class="btn-secondary text-xs" style="width:100%;margin-top:12px" onclick="goToStage(\'qr\')">← Back</button>' +
+        '</div>';
+    }
+
+    function renderSuccess(did) {
+      var r = currentRole;
+      document.getElementById('successCard').innerHTML =
+        '<div class="glass-card-static p-8 text-center">' +
+        '<div style="width:72px;height:72px;border-radius:50%;background:' + r.colorHex + '18;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;position:relative">' +
+        '<svg viewBox="0 0 24 24" style="width:36px;height:36px;color:' + r.colorHex + '"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>' +
+        '<div class="success-ring" style="border-color:' + r.colorHex + '"></div>' +
+        '</div>' +
+        '<div class="text-xs font-bold uppercase tracking-widest mb-1" style="color:' + r.colorHex + '">Authentication Complete</div>' +
+        '<h2 class="text-xl font-bold mb-1">Welcome, ' + r.label + '</h2>' +
+        '<p class="text-sm mb-4" style="color:var(--text-secondary)">ZK credential verified on-chain.</p>' +
+        '<div class="p-3 rounded-lg mb-4" style="background:rgba(99,102,241,0.04)">' +
+        '<div class="text-xs" style="color:var(--text-muted)">Verified DID</div>' +
+        '<div class="text-xs font-mono" style="color:var(--text-secondary);word-break:break-all">' + did + '</div>' +
+        '</div>' +
+        '<button class="btn-primary" style="width:100%;background:' + r.colorHex + '" onclick="window.location.href=\'' + r.href + '\'">Enter ' + r.label + ' Dashboard</button>' +
+        '<button class="btn-secondary text-sm" style="width:100%;margin-top:8px" onclick="PRAMAANIK.auth.clearSession();goToStage(\'role\')">Switch Role</button>' +
+        '</div>';
+    }
+  </script>
+</body>
+
+</html>

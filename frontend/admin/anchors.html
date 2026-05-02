@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>PRAMAANIK · Anchor Status</title>
+  <meta name="description" content="PRAMAANIK Public Fund Transparency Dashboard">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡</text></svg>">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body class="bg-grid">
+  <div id="mobileHeader"></div>
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <h1 class="text-2xl font-bold mb-1">Dual Public Anchor Status</h1>
+    <p class="text-sm mb-6" style="color:var(--text-muted)">Merkle roots anchored to public chains for tamper-evident verification</p>
+    <div class="grid grid-2 gap-5" id="anchorsDetail"></div>
+  </main>
+  <script src="../js/data.js"></script>
+  <script src="../js/auth.js"></script>
+  <script src="../js/sidebar.js"></script>
+  <script>
+    PRAMAANIK.initPage('admin','anchors');
+    document.getElementById('anchorsDetail').innerHTML = PRAMAANIK.anchors.map(a => `
+      <div class="glass-card p-6">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-3">
+            <div style="width:40px;height:40px;border-radius:12px;background:rgba(99,102,241,0.1);border:1px solid var(--border-subtle);display:flex;align-items:center;justify-content:center">
+              <svg class="icon" viewBox="0 0 24 24" style="color:var(--accent-primary)"><circle cx="12" cy="5" r="3"/><line x1="12" y1="22" x2="12" y2="8"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></svg>
+            </div>
+            <div>
+              <div class="font-bold">${a.chain}</div>
+              <div class="text-xs" style="color:var(--text-muted)">${a.time}</div>
+            </div>
+          </div>
+          <span class="badge badge-active">${a.status}</span>
+        </div>
+        <div class="space-y-3">
+          <div class="p-3 rounded-lg" style="background:rgba(99,102,241,0.04)">
+            <div class="text-xs uppercase tracking-wider mb-1" style="color:var(--text-muted)">Merkle Root</div>
+            <div class="font-mono text-xs break-all" style="color:var(--text-secondary)">${a.root}</div>
+          </div>
+          <div class="p-3 rounded-lg" style="background:rgba(99,102,241,0.04)">
+            <div class="text-xs uppercase tracking-wider mb-1" style="color:var(--text-muted)">Sequence</div>
+            <div class="font-mono text-sm font-semibold">#${a.seq.toLocaleString()}</div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  </script>
+</body>
+</html>

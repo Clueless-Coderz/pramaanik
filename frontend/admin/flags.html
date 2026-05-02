@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>PRAMAANIK · Anomaly Flags</title>
+  <meta name="description" content="PRAMAANIK Public Fund Transparency Dashboard">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡</text></svg>">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body class="bg-grid">
+  <div id="mobileHeader"></div>
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <h1 class="text-2xl font-bold mb-1">Anomaly Flags</h1>
+    <p class="text-sm mb-6" style="color:var(--text-muted)">zkML-detected anomalies requiring investigation · RGCN v2.3</p>
+    <div class="grid gap-5" id="flagsGrid" style="grid-template-columns:repeat(auto-fill,minmax(380px,1fr))"></div>
+  </main>
+  <script src="../js/data.js"></script>
+  <script src="../js/auth.js"></script>
+  <script src="../js/sidebar.js"></script>
+  <script>
+    const P = PRAMAANIK;
+    P.initPage('admin','flags');
+    const sevBadge = { critical:'badge-flagged', high:'badge-pending', medium:'badge-frozen' };
+
+    document.getElementById('flagsGrid').innerHTML = P.flags.map(f => {
+      const pct = f.risk/100;
+      const color = pct>=90?'var(--accent-danger)':pct>=70?'var(--accent-warning)':'var(--accent-primary)';
+      return `
+      <div class="glass-card p-6">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <div class="font-bold">${f.type}</div>
+            <div class="text-xs" style="color:var(--text-muted)">${f.id} · ${f.model}</div>
+          </div>
+          <span class="badge ${sevBadge[f.severity]||'badge-pending'}">${f.severity}</span>
+        </div>
+
+        <p class="text-sm mb-4" style="color:var(--text-secondary);line-height:1.6">${f.explanation}</p>
+
+        <!-- Risk gauge -->
+        <div class="flex items-center gap-3 mb-4">
+          <div class="risk-bar-track"><div class="risk-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+          <span class="font-mono font-bold text-lg" style="color:${color}">${pct.toFixed(0)}%</span>
+        </div>
+
+        <!-- Detail grid -->
+        <div class="grid grid-2 gap-3 mb-4">
+          <div class="p-3 rounded-lg" style="background:rgba(99,102,241,0.04)">
+            <div class="text-xs uppercase tracking-wider mb-1" style="color:var(--text-muted)">Scheme</div>
+            <div class="text-sm font-semibold">${f.scheme}</div>
+          </div>
+          <div class="p-3 rounded-lg" style="background:rgba(99,102,241,0.04)">
+            <div class="text-xs uppercase tracking-wider mb-1" style="color:var(--text-muted)">Amount</div>
+            <div class="text-sm font-mono font-semibold">${f.amount}</div>
+          </div>
+        </div>
+
+        <div class="p-3 rounded-lg mb-4" style="background:rgba(99,102,241,0.04)">
+          <div class="text-xs uppercase tracking-wider mb-1" style="color:var(--text-muted)">Motif</div>
+          <div class="text-xs font-mono" style="color:var(--text-secondary)">${f.motif}</div>
+        </div>
+
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-xs" style="color:var(--text-muted)">Proof verified:</span>
+          ${f.proofVerified
+            ? `<svg class="icon icon-sm" viewBox="0 0 24 24" style="color:var(--accent-success)"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span class="text-xs" style="color:var(--accent-success)">Verified</span>`
+            : `<svg class="icon icon-sm" viewBox="0 0 24 24" style="color:var(--accent-warning)"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><span class="text-xs" style="color:var(--accent-warning)">Pending</span>`
+          }
+        </div>
+
+        <div class="flex gap-2">
+          <button class="btn-secondary btn-sm flex-1 justify-center" id="inv-${f.id}" onclick="investigateFlag('${f.id}')">Investigate</button>
+          <button class="btn-danger btn-sm flex-1 justify-center" id="frz-${f.id}" onclick="freezeFlag('${f.id}')">Freeze</button>
+        </div>
+
+        <div class="text-xs mt-3" style="color:var(--text-muted)">${f.time} · TX: <span class="font-mono">${f.txId}</span></div>
+      </div>`;
+    }).join('');
+
+    function investigateFlag(id) {
+      var btn = document.getElementById('inv-' + id);
+      btn.textContent = '⏳ Under Investigation';
+      btn.disabled = true;
+      btn.style.background = 'rgba(245,158,11,0.1)';
+      btn.style.color = 'var(--accent-warning)';
+      btn.style.borderColor = 'var(--accent-warning)';
+      var flag = P.flags.find(function(f) { return f.id === id; });
+      if (flag) flag.investigating = true;
+    }
+    window.investigateFlag = investigateFlag;
+
+    function freezeFlag(id) {
+      var btn = document.getElementById('frz-' + id);
+      var flag = P.flags.find(function(f) { return f.id === id; });
+      if (!flag) return;
+      btn.textContent = '🧊 Frozen';
+      btn.disabled = true;
+      btn.style.background = 'rgba(6,182,212,0.1)';
+      btn.style.color = 'var(--accent-secondary)';
+      // Also freeze the corresponding disbursement
+      var disb = P.disbursements.find(function(d) { return d.id === flag.txId; });
+      if (disb) disb.status = 'frozen';
+      // Add to frozen assets if not already there
+      if (!P.frozen.find(function(f) { return f.flag === id; })) {
+        P.frozen.push({
+          id: 'FRZ-' + String(P.frozen.length + 1).padStart(3,'0'),
+          txId: flag.txId, scheme: flag.scheme,
+          amountRaw: flag.amountRaw, amount: flag.amount,
+          reason: flag.explanation, flag: id,
+          frozenAt: new Date().toLocaleString('en-IN', {timeZone:'Asia/Kolkata'}),
+          frozenBy: 'Admin (current session)',
+          status: 'Frozen', daysLocked: 0
+        });
+      }
+    }
+    window.freezeFlag = freezeFlag;
+  </script>
+</body>
+</html>

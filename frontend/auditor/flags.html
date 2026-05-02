@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>PRAMAANIK · Auditor Flags</title>
+  <meta name="description" content="PRAMAANIK Public Fund Transparency Dashboard">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡</text></svg>">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body class="bg-grid">
+  <div id="mobileHeader"></div>
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <h1 class="text-2xl font-bold mb-1">Anomaly Investigation</h1>
+    <p class="text-sm mb-6" style="color:var(--text-muted)">Deep-dive into zkML-detected anomalies with full evidence chain</p>
+    <div class="grid gap-5" id="auditorFlags" style="grid-template-columns:repeat(auto-fill,minmax(380px,1fr))"></div>
+  </main>
+  <script src="../js/data.js"></script>
+  <script src="../js/auth.js"></script>
+  <script src="../js/sidebar.js"></script>
+  <script>
+    const P = PRAMAANIK;
+    P.initPage('auditor','flags');
+    const sb = { critical:'badge-flagged', high:'badge-pending', medium:'badge-frozen' };
+    document.getElementById('auditorFlags').innerHTML = P.flags.map(f => {
+      const pct=f.risk/100; const c=pct>=90?'var(--accent-danger)':pct>=70?'var(--accent-warning)':'var(--accent-primary)';
+      return `<div class="glass-card p-6">
+        <div class="flex items-center justify-between mb-3"><div><div class="font-bold">${f.type}</div><div class="text-xs" style="color:var(--text-muted)">${f.id}</div></div><span class="badge ${sb[f.severity]}">${f.severity}</span></div>
+        <p class="text-sm mb-3" style="color:var(--text-secondary)">${f.explanation}</p>
+        <div class="flex items-center gap-3 mb-3"><div class="risk-bar-track"><div class="risk-bar-fill" style="width:${pct}%;background:${c}"></div></div><span class="font-mono font-bold" style="color:${c}">${pct.toFixed(0)}%</span></div>
+        <div class="p-3 rounded mb-3" style="background:rgba(99,102,241,0.04)"><div class="text-xs" style="color:var(--text-muted)">Motif</div><div class="text-xs font-mono">${f.motif}</div></div>
+        <div class="flex gap-2"><button class="btn-secondary btn-sm flex-1 justify-center" id="rpt-${f.id}" onclick="showReport('${f.id}')">Full Report</button><button class="btn-danger btn-sm flex-1 justify-center" id="afrz-${f.id}" onclick="auditorFreeze('${f.id}')">Freeze</button></div>
+        <div id="report-${f.id}" style="display:none" class="mt-3 p-3 rounded-lg text-xs" style="background:rgba(99,102,241,0.04)"></div>
+      </div>`;
+    }).join('');
+
+    function showReport(id) {
+      var flag = P.flags.find(function(f) { return f.id === id; });
+      if (!flag) return;
+      var el = document.getElementById('report-' + id);
+      el.style.display = el.style.display === 'none' ? 'block' : 'none';
+      el.style.background = 'rgba(99,102,241,0.04)';
+      el.innerHTML = '<div class="font-bold mb-2">Detailed Report — ' + flag.id + '</div>' +
+        '<div class="mb-1"><b>Type:</b> ' + flag.type + '</div>' +
+        '<div class="mb-1"><b>Model:</b> ' + flag.model + '</div>' +
+        '<div class="mb-1"><b>Scheme:</b> ' + flag.scheme + '</div>' +
+        '<div class="mb-1"><b>Amount:</b> ' + flag.amount + '</div>' +
+        '<div class="mb-1"><b>Risk Score:</b> ' + (flag.risk/100).toFixed(0) + '%</div>' +
+        '<div class="mb-1"><b>Motif:</b> ' + flag.motif + '</div>' +
+        '<div class="mb-1"><b>Proof Verified:</b> ' + (flag.proofVerified ? '✓ Yes' : '✗ Pending') + '</div>' +
+        '<div class="mb-1"><b>Explanation:</b> ' + flag.explanation + '</div>' +
+        '<div class="font-mono" style="color:var(--text-muted)"><b>TX:</b> ' + flag.txId + '</div>';
+    }
+    window.showReport = showReport;
+
+    function auditorFreeze(id) {
+      var btn = document.getElementById('afrz-' + id);
+      var flag = P.flags.find(function(f) { return f.id === id; });
+      if (!flag) return;
+      btn.textContent = '🧊 Frozen';
+      btn.disabled = true;
+      btn.style.background = 'rgba(6,182,212,0.1)';
+      btn.style.color = 'var(--accent-secondary)';
+      var disb = P.disbursements.find(function(d) { return d.id === flag.txId; });
+      if (disb) disb.status = 'frozen';
+      if (!P.frozen.find(function(f) { return f.flag === id; })) {
+        P.frozen.push({
+          id: 'FRZ-' + String(P.frozen.length + 1).padStart(3,'0'),
+          txId: flag.txId, scheme: flag.scheme,
+          amountRaw: flag.amountRaw, amount: flag.amount,
+          reason: 'Frozen by auditor: ' + flag.explanation, flag: id,
+          frozenAt: new Date().toLocaleString('en-IN', {timeZone:'Asia/Kolkata'}),
+          frozenBy: 'Auditor (current session)',
+          status: 'Frozen', daysLocked: 0
+        });
+      }
+    }
+    window.auditorFreeze = auditorFreeze;
+  </script>
+</body>
+</html>

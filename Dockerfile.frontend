@@ -1,0 +1,19 @@
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Copy the server and package files
+COPY package.json ./
+COPY server.js ./
+
+# Install any potential dependencies (ngrok, etc.)
+RUN npm install
+
+# Copy the static frontend directory
+COPY frontend ./frontend
+
+# Expose the port the auth server runs on
+EXPOSE 3333
+
+# Start the Node.js static server
+CMD ["node", "server.js"]

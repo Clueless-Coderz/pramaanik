@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>PRAMAANIK · Admin Dashboard</title>
+  <meta name="description" content="PRAMAANIK Public Fund Transparency Dashboard">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡</text></svg>">
+  <link rel="stylesheet" href="../css/style.css">
+  <style>
+    .stat-card .counter{transition:color .3s}
+    .tab-bar{display:flex;gap:4px;padding:4px;border-radius:10px;background:rgba(99,102,241,0.04);border:1px solid var(--border-subtle)}
+    .tab-bar button{padding:6px 14px;border:none;background:none;color:var(--text-muted);font-size:.75rem;font-weight:600;border-radius:8px;cursor:pointer;font-family:inherit;transition:.2s}
+    .tab-bar button.active{background:var(--accent-primary);color:#fff}
+    .search-box{position:relative}
+    .search-box input{padding-left:36px}
+    .search-box svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-muted)}
+    .live-dot{display:inline-flex;align-items:center;gap:6px}
+    .live-dot::before{content:'';width:6px;height:6px;border-radius:50%;animation:glow-pulse 2s ease-in-out infinite}
+    .live-dot.on::before{background:var(--accent-success);--glow-color:var(--accent-success)}
+    .live-dot.off::before{background:var(--accent-warning);--glow-color:var(--accent-warning)}
+    @keyframes countUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    .count-anim{animation:countUp .4s ease-out both}
+    .chart-bar{display:flex;align-items:flex-end;gap:3px;height:60px;padding-top:8px}
+    .chart-bar div{flex:1;border-radius:3px 3px 0 0;background:var(--accent-primary);opacity:.6;transition:height .5s ease,opacity .2s}
+    .chart-bar div:hover{opacity:1}
+    .disb-row{cursor:pointer;transition:background .15s}.disb-row:hover td{background:rgba(99,102,241,0.06)!important}
+    .disb-row.selected td{background:rgba(99,102,241,0.1)!important}
+    .detail-panel{position:sticky;top:32px}
+    @media(max-width:1024px){.dashboard-grid{grid-template-columns:1fr!important}}
+    @media(max-width:768px){.stat-grid{grid-template-columns:repeat(2,1fr)!important}}
+  </style>
+</head>
+<body class="bg-grid">
+  <div id="mobileHeader"></div>
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content" style="padding-top:32px">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-8" style="flex-wrap:wrap;gap:16px">
+      <div>
+        <h1 class="text-2xl font-bold mb-1">Admin Dashboard</h1>
+        <p class="text-sm" style="color:var(--text-muted)">Real-time fund flow monitoring · <span id="connStatus" class="live-dot off" style="color:var(--accent-warning)">Demo mode</span></p>
+      </div>
+      <div class="flex items-center gap-3">
+        <button class="btn-secondary btn-sm" onclick="refreshData()" id="refreshBtn">
+          <svg class="icon icon-sm" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Refresh
+        </button>
+        <button class="btn-primary btn-sm" onclick="showNewDisbModal()">+ New Disbursement</button>
+      </div>
+    </div>
+
+    <!-- Stat Cards -->
+    <div class="grid gap-5 mb-8 stat-grid" style="grid-template-columns:repeat(4,1fr)" id="statsGrid"></div>
+
+    <!-- Tabs + Search -->
+    <div class="flex items-center justify-between mb-4" style="flex-wrap:wrap;gap:12px">
+      <div class="tab-bar" id="tabBar">
+        <button class="active" onclick="filterDisb('all',this)">All</button>
+        <button onclick="filterDisb('active',this)">Active</button>
+        <button onclick="filterDisb('flagged',this)">Flagged</button>
+        <button onclick="filterDisb('pending',this)">Pending</button>
+      </div>
+      <div class="search-box">
+        <svg class="icon icon-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input class="input-base" style="width:240px;padding-left:36px;font-size:.8rem" placeholder="Search TX, scheme, DID…" id="searchInput" oninput="searchDisb()">
+      </div>
+    </div>
+
+    <!-- Main Grid: Table + Side Panel -->
+    <div class="grid gap-6 mb-8 dashboard-grid" style="grid-template-columns:2fr 1fr">
+      <!-- Disbursements Table -->
+      <div class="glass-card-static overflow-hidden" style="padding:0">
+        <div class="flex items-center justify-between p-4 border-b">
+          <h2 class="font-bold text-sm flex items-center gap-2">
+            <svg class="icon" viewBox="0 0 24 24" style="color:var(--accent-secondary)"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            Disbursements <span class="text-xs font-mono" style="color:var(--text-muted)" id="disbCount"></span>
+          </h2>
+          <span class="text-xs" style="color:var(--text-muted)">Click row for details</span>
+        </div>
+        <div class="overflow-x-auto" style="max-height:520px;overflow-y:auto">
+          <table class="data-table" id="disbTable"><thead><tr><th>TX</th><th>Scheme</th><th>Amount</th><th>Oracle</th><th>Status</th><th>Time</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+
+      <!-- Side Panel -->
+      <div class="detail-panel">
+        <!-- Detail Card or Anomaly List -->
+        <div id="sidePanel"></div>
+      </div>
+    </div>
+
+    <!-- Anchor + Mini Chart -->
+    <div class="grid grid-2 gap-6">
+      <div class="glass-card-static p-5">
+        <h2 class="font-bold text-sm flex items-center gap-2 mb-4">
+          <svg class="icon" viewBox="0 0 24 24" style="color:var(--accent-primary)"><circle cx="12" cy="5" r="3"/><line x1="12" y1="22" x2="12" y2="8"/><path d="M5 12H2a10 10 0 0 0 20 0h-3"/></svg>
+          Dual Anchor Status
+        </h2>
+        <div class="space-y-3" id="anchorsGrid"></div>
+      </div>
+      <div class="glass-card-static p-5">
+        <h2 class="font-bold text-sm mb-4">Disbursement Volume (24h)</h2>
+        <div class="chart-bar" id="miniChart"></div>
+        <div class="flex items-center justify-between mt-2 text-xs" style="color:var(--text-muted)"><span>12h ago</span><span>Now</span></div>
+      </div>
+    </div>
+
+    <!-- New Disbursement Modal -->
+    <div class="modal-overlay" id="newDisbModal" style="display:none" onclick="if(event.target===this)closeNewDisbModal()">
+      <div class="modal-content p-6">
+        <div class="flex items-center justify-between mb-5">
+          <h2 class="font-bold text-lg">New Disbursement</h2>
+          <button onclick="closeNewDisbModal()" style="background:none;border:none;color:var(--text-muted);cursor:pointer"><svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+        <form onsubmit="submitDisb(event)">
+          <div class="mb-4"><label class="text-xs font-semibold uppercase tracking-wider mb-1" style="display:block;color:var(--text-muted)">Scheme</label><select class="input-base" id="mScheme" required></select></div>
+          <div class="mb-4"><label class="text-xs font-semibold uppercase tracking-wider mb-1" style="display:block;color:var(--text-muted)">Recipient DID</label><input class="input-base font-mono" id="mRecipient" placeholder="did:polygonid:…" required></div>
+          <div class="mb-4"><label class="text-xs font-semibold uppercase tracking-wider mb-1" style="display:block;color:var(--text-muted)">Amount (₹)</label><input class="input-base" type="number" id="mAmount" placeholder="2000" required></div>
+          <div id="txResult" class="mb-4"></div>
+          <button type="submit" class="btn-primary w-full justify-center" id="submitBtn">Submit On-Chain</button>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <script src="../js/data.js"></script>
+  <script src="../js/auth.js"></script>
+  <script src="../js/sidebar.js"></script>
+  <script>
+const P = PRAMAANIK;
+P.initPage('admin','dashboard');
+
+let currentFilter = 'all';
+let searchTerm = '';
+let selectedDisbId = null;
+let liveDisb = [...P.disbursements];
+
+// ── Animated counter ──
+function animateValue(el, end, duration=800) {
+  const start = 0; const startTime = performance.now();
+  const isNum = typeof end === 'number';
+  if (!isNum) { el.textContent = end; return; }
+  function update(now) {
+    const p = Math.min((now-startTime)/duration, 1);
+    const ease = 1-Math.pow(1-p,3);
+    el.textContent = Math.floor(ease * end).toLocaleString();
+    if (p < 1) requestAnimationFrame(update);
+  }
+  requestAnimationFrame(update);
+}
+
+// ── Stats ──
+function renderStats() {
+  const cfg = [
+    { label:'Total Sanctioned', value:P.stats.totalSanctioned, icon:'rupee', color:'var(--accent-primary)', num:false },
+    { label:'Active Schemes', value:P.stats.activeSchemes, icon:'fileText', color:'var(--accent-secondary)', num:true },
+    { label:'Disbursements', value:liveDisb.length, icon:'activity', color:'var(--accent-success)', num:true },
+    { label:'Anomaly Flags', value:P.flags.length, icon:'alertTriangle', color:'var(--accent-danger)', num:true },
+  ];
+  document.getElementById('statsGrid').innerHTML = cfg.map((s,i) => `
+    <div class="stat-card count-anim" style="animation-delay:${i*80}ms">
+      <div class="flex items-center justify-between mb-1">
+        <span class="stat-label">${s.label}</span>
+        <span style="color:${s.color}">${P.icon(s.icon)}</span>
+      </div>
+      <div class="stat-value counter" style="color:${s.color}" id="stat${i}">${s.num?'0':s.value}</div>
+      <div class="flex items-center gap-1 text-xs mt-1" style="color:var(--text-muted)">
+        <svg class="icon icon-sm" viewBox="0 0 24 24" style="color:var(--accent-success)"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/></svg>
+        seeded
+      </div>
+    </div>
+  `).join('');
+  cfg.forEach((s,i) => { if(s.num) setTimeout(()=>animateValue(document.getElementById('stat'+i),s.value),i*100+200); });
+}
+renderStats();
+
+// ── Oracle icon ──
+function oIcon(pass) {
+  return pass
+    ? `<svg class="icon icon-sm" viewBox="0 0 24 24" style="color:var(--accent-success)"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`
+    : `<svg class="icon icon-sm" viewBox="0 0 24 24" style="color:var(--accent-danger)"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`;
+}
+const bc = { active:'badge-active', flagged:'badge-flagged', frozen:'badge-frozen', pending:'badge-pending' };
+
+// ── Table ──
+function renderTable() {
+  let data = liveDisb;
+  if (currentFilter !== 'all') data = data.filter(d => d.status === currentFilter);
+  if (searchTerm) { const q = searchTerm.toLowerCase(); data = data.filter(d => d.id.toLowerCase().includes(q)||d.scheme.toLowerCase().includes(q)||d.recipient.toLowerCase().includes(q)||d.amount.toLowerCase().includes(q)); }
+  document.getElementById('disbCount').textContent = `(${data.length})`;
+  document.querySelector('#disbTable tbody').innerHTML = data.map(d => `
+    <tr class="disb-row${selectedDisbId===d.id?' selected':''}" onclick="selectDisb('${d.id}')">
+      <td><span class="font-mono text-xs" style="color:var(--text-muted)">${d.id}</span></td>
+      <td class="text-xs">${d.scheme.length>30?d.scheme.slice(0,28)+'…':d.scheme}</td>
+      <td class="font-semibold text-sm">${d.amount}</td>
+      <td><div class="flex items-center gap-1">${oIcon(d.gst)}${oIcon(d.bank)}${oIcon(d.geo)}</div></td>
+      <td><span class="badge ${bc[d.status]||'badge-pending'}">${d.status}</span></td>
+      <td class="text-xs whitespace-nowrap" style="color:var(--text-muted)">${d.time}</td>
+    </tr>
+  `).join('') || `<tr><td colspan="6" class="text-center p-8" style="color:var(--text-muted)">No matching disbursements</td></tr>`;
+}
+
+function filterDisb(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('#tabBar button').forEach(b => b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  renderTable();
+}
+function searchDisb() { searchTerm = document.getElementById('searchInput').value; renderTable(); }
+function selectDisb(id) { selectedDisbId = selectedDisbId===id?null:id; renderTable(); renderSidePanel(); }
+
+// ── Side Panel ──
+function renderSidePanel() {
+  const panel = document.getElementById('sidePanel');
+  const d = liveDisb.find(x => x.id === selectedDisbId);
+  if (d) {
+    // Detail view
+    const stageColor = d.status==='flagged'?'var(--accent-danger)':d.status==='active'?'var(--accent-success)':'var(--accent-primary)';
+    panel.innerHTML = `
+      <div class="glass-card-static p-5 mb-4">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-bold text-sm">Transaction Detail</h3>
+          <span class="badge ${bc[d.status]}">${d.status}</span>
+        </div>
+        <div class="space-y-3">
+          <div class="p-3 rounded" style="background:rgba(99,102,241,0.04)"><div class="text-xs" style="color:var(--text-muted)">TX ID</div><div class="font-mono text-xs break-all">${d.id}</div></div>
+          <div class="p-3 rounded" style="background:rgba(99,102,241,0.04)"><div class="text-xs" style="color:var(--text-muted)">Scheme</div><div class="text-sm font-semibold">${d.scheme}</div></div>
+          <div class="grid grid-2 gap-3">
+            <div class="p-3 rounded" style="background:rgba(99,102,241,0.04)"><div class="text-xs" style="color:var(--text-muted)">Amount</div><div class="font-semibold font-mono">${d.amount}</div></div>
+            <div class="p-3 rounded" style="background:rgba(99,102,241,0.04)"><div class="text-xs" style="color:var(--text-muted)">Stage</div><div class="text-sm" style="color:${stageColor}">${d.stage}</div></div>
+          </div>
+          <div class="p-3 rounded" style="background:rgba(99,102,241,0.04)"><div class="text-xs" style="color:var(--text-muted)">Recipient</div><div class="font-mono text-xs break-all">${d.recipient}</div></div>
+          <div class="p-3 rounded" style="background:rgba(99,102,241,0.04)">
+            <div class="text-xs mb-2" style="color:var(--text-muted)">Oracle Verification</div>
+            <div class="flex gap-4">
+              <div class="flex items-center gap-1 text-xs">${oIcon(d.gst)} GST</div>
+              <div class="flex items-center gap-1 text-xs">${oIcon(d.bank)} Bank</div>
+              <div class="flex items-center gap-1 text-xs">${oIcon(d.geo)} Geo</div>
+            </div>
+          </div>
+        </div>
+        ${d.status==='flagged'?`<button class="btn-danger w-full justify-center mt-4 text-sm" onclick="freezeDisb('${d.id}')"><svg class="icon icon-sm" viewBox="0 0 24 24"><line x1="12" y1="2" x2="12" y2="22"/><path d="M20 16l-4-4 4-4"/><path d="M4 8l4 4-4 4"/></svg> Freeze Transaction</button>`:''}
+      </div>
+    `;
+  } else {
+    // Anomaly alerts
+    panel.innerHTML = `
+      <div class="glass-card-static overflow-hidden" style="padding:0">
+        <div class="flex items-center justify-between p-4 border-b">
+          <h2 class="font-bold text-sm flex items-center gap-2"><svg class="icon" viewBox="0 0 24 24" style="color:var(--accent-danger)"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>Alerts</h2>
+          <span class="badge badge-flagged text-xs">${P.flags.length} active</span>
+        </div>
+        <div class="p-4 space-y-3 overflow-y-auto" style="max-height:440px">
+          ${P.flags.map(f => {
+            const pct=f.risk/100; const c=pct>=90?'var(--accent-danger)':pct>=70?'var(--accent-warning)':'var(--accent-success)';
+            return `<div class="p-3 rounded-lg" style="background:rgba(239,68,68,0.04);border:1px solid var(--border-subtle)">
+              <div class="flex items-start justify-between mb-1"><span class="text-xs font-bold" style="color:var(--accent-danger)">${f.type}</span><span class="text-xs font-mono" style="color:var(--text-muted)">${f.id}</span></div>
+              <p class="text-xs mb-2" style="color:var(--text-secondary);line-height:1.5">${f.explanation.slice(0,100)}…</p>
+              <div class="flex items-center gap-2"><div class="risk-bar-track"><div class="risk-bar-fill" style="width:${pct}%;background:${c}"></div></div><span class="text-xs font-mono font-semibold" style="color:${c}">${pct.toFixed(0)}%</span></div>
+              <div class="flex gap-2 mt-2"><button class="text-xs px-2 py-1 rounded cursor-pointer" style="background:rgba(99,102,241,0.1);color:var(--accent-primary);border:none;font-family:inherit" onclick="selectDisb('${f.txId}')">View TX</button><button class="text-xs px-2 py-1 rounded cursor-pointer" style="background:rgba(239,68,68,0.1);color:var(--accent-danger);border:none;font-family:inherit" onclick="freezeDisb('${f.txId}')">Freeze</button></div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }
+}
+renderTable();
+renderSidePanel();
+
+// ── Anchors ──
+document.getElementById('anchorsGrid').innerHTML = P.anchors.map(a => `
+  <div class="p-4 rounded-lg flex items-center justify-between gap-4" style="border:1px solid var(--border-subtle);background:rgba(99,102,241,0.04)">
+    <div style="min-width:0"><div class="font-semibold text-sm mb-1">${a.chain}</div><div class="text-xs font-mono truncate" style="color:var(--text-muted)">Root: ${a.root} · Seq #${a.seq.toLocaleString()}</div></div>
+    <div class="text-right shrink-0"><span class="badge badge-active">${a.status}</span><div class="text-xs mt-1" style="color:var(--text-muted)">${a.time}</div></div>
+  </div>
+`).join('');
+
+// ── Mini Chart ──
+const bars = Array.from({length:24}, () => 20+Math.random()*80);
+document.getElementById('miniChart').innerHTML = bars.map(h => `<div style="height:${h}%"></div>`).join('');
+
+// ── Freeze ──
+function freezeDisb(id) {
+  if(confirm('Freeze all transactions linked to '+id+'?')) {
+    liveDisb = liveDisb.map(d => d.id===id?{...d,status:'frozen'}:d);
+    renderTable(); renderSidePanel(); renderStats();
+  }
+}
+
+// ── Refresh ──
+function refreshData() {
+  const btn = document.getElementById('refreshBtn');
+  btn.querySelector('svg').style.animation = 'spin .5s linear';
+  setTimeout(() => { btn.querySelector('svg').style.animation = ''; renderStats(); renderTable(); }, 500);
+}
+
+// ── New Disb Modal ──
+const sel = document.getElementById('mScheme');
+P.schemes.forEach(s => { const o = document.createElement('option'); o.value=s.name; o.textContent=s.name; sel.appendChild(o); });
+function showNewDisbModal() { document.getElementById('newDisbModal').style.display='flex'; }
+function closeNewDisbModal() { document.getElementById('newDisbModal').style.display='none'; document.getElementById('txResult').innerHTML=''; }
+function submitDisb(e) {
+  e.preventDefault();
+  const btn = document.getElementById('submitBtn');
+  btn.disabled=true; btn.textContent='Submitting…';
+  setTimeout(() => {
+    const txHash = '0x'+Array.from({length:8},()=>Math.floor(Math.random()*16).toString(16)).join('')+'...'+Array.from({length:4},()=>Math.floor(Math.random()*16).toString(16)).join('');
+    const newD = { id:txHash, scheme:document.getElementById('mScheme').value, stage:'Sanctioned', amount:'₹'+Number(document.getElementById('mAmount').value).toLocaleString(), recipient:document.getElementById('mRecipient').value, time:'just now', status:'pending', gst:true, bank:true, geo:true };
+    liveDisb.unshift(newD);
+    document.getElementById('txResult').innerHTML=`<div class="p-3 rounded-lg text-sm" style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.2);color:var(--accent-success)">✓ TX submitted: <span class="font-mono text-xs">${txHash}</span></div>`;
+    btn.disabled=false; btn.textContent='Submit On-Chain';
+    renderTable(); renderStats();
+    setTimeout(closeNewDisbModal, 1500);
+  }, 1200);
+}
+
+// ── Keyboard shortcuts ──
+document.addEventListener('keydown', e => {
+  if(e.key==='Escape') { closeNewDisbModal(); selectedDisbId=null; renderTable(); renderSidePanel(); }
+  if(e.key==='/' && !e.ctrlKey) { e.preventDefault(); document.getElementById('searchInput').focus(); }
+});
+  </script>
+</body>
+</html>

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>PRAMAANIK · Frozen Assets</title>
+  <meta name="description" content="PRAMAANIK Public Fund Transparency Dashboard">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡</text></svg>">
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body class="bg-grid">
+  <div id="mobileHeader"></div>
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main-content">
+    <h1 class="text-2xl font-bold mb-1">Frozen Disbursements</h1>
+    <p class="text-sm mb-6" style="color:var(--text-muted)">Funds held under auditor lock · Cannot leave Treasury until released</p>
+
+    <!-- Stats -->
+    <div class="grid grid-3 gap-4 mb-6" id="frozenStats"></div>
+
+    <!-- Master/Detail -->
+    <div class="grid gap-5" style="grid-template-columns:2fr 3fr">
+      <div class="space-y-3" id="frozenList"></div>
+      <div id="frozenDetail"></div>
+    </div>
+  </main>
+  <script src="../js/data.js"></script>
+  <script src="../js/auth.js"></script>
+  <script src="../js/sidebar.js"></script>
+  <script>
+    const P = PRAMAANIK;
+    P.initPage('auditor','frozen');
+    let assets = [...P.frozen];
+    let selectedId = assets[0]?.id || '';
+
+    function render() {
+      const activeAssets = assets.filter(a => a.status !== 'Released');
+      const totalLocked = activeAssets.reduce((s,a) => s+a.amountRaw, 0);
+      const avgDays = assets.reduce((s,a) => s+a.daysLocked, 0) / (assets.length||1);
+
+      document.getElementById('frozenStats').innerHTML = [
+        { label:"Frozen Items", value:activeAssets.length, sub:assets.length+' total', color:'var(--accent-primary)', icon:'snowflake' },
+        { label:"Total Value Locked", value:'₹'+(totalLocked/10000000).toFixed(2)+' Cr', sub:'pending investigation', color:'var(--accent-warning)', icon:'rupee' },
+        { label:"Avg. Hold Time", value:avgDays.toFixed(1)+' days', sub:'across all holds', color:'var(--accent-secondary)', icon:'clock' },
+      ].map(s => `<div class="stat-card"><div class="flex items-center justify-between mb-1"><span class="stat-label">${s.label}</span><span style="color:${s.color}">${P.icon(s.icon)}</span></div><div class="stat-value" style="color:${s.color}">${s.value}</div>${s.sub?`<div class="text-xs mt-1" style="color:var(--text-muted)">${s.sub}</div>`:''}</div>`).join('');
+
+      const stBadge = { Frozen:'badge-frozen', 'Under Review':'badge-pending', Released:'badge-active' };
+      document.getElementById('frozenList').innerHTML = assets.map(a => `
+        <button class="glass-card-static p-4 text-left w-full" style="${selectedId===a.id?'border-color:var(--accent-primary);box-shadow:0 0 0 1px var(--accent-primary)':''};cursor:pointer" onclick="selectedId='${a.id}';render()">
+          <div class="flex items-center justify-between mb-2">
+            <span class="font-mono text-xs font-semibold" style="color:var(--accent-primary)">${a.id}</span>
+            <span class="badge ${stBadge[a.status]}">${a.status}</span>
+          </div>
+          <div class="font-semibold text-sm mb-1">${a.scheme}</div>
+          <div class="flex items-center justify-between text-xs" style="color:var(--text-muted)">
+            <span class="font-mono">${a.amount}</span>
+            <span>${a.daysLocked}d locked</span>
+          </div>
+        </button>
+      `).join('');
+
+      const sel = assets.find(a => a.id===selectedId) || assets[0];
+      if (!sel) return;
+      const stColor = { Frozen:'var(--accent-primary)', 'Under Review':'var(--accent-warning)', Released:'var(--accent-success)' };
+      document.getElementById('frozenDetail').innerHTML = `
+        <div class="glass-card-static p-6">
+          <div class="flex items-start justify-between mb-5">
+            <div class="flex items-center gap-3">
+              <div style="width:40px;height:40px;border-radius:12px;background:${stColor[sel.status]}18;border:1px solid ${stColor[sel.status]}33;display:flex;align-items:center;justify-content:center">
+                ${sel.status==='Released'?P.icon('unlock'):P.icon('lock')}
+              </div>
+              <div><div class="font-bold">${sel.id}</div><div class="text-xs" style="color:var(--text-muted)">Frozen ${sel.frozenAt}</div></div>
+            </div>
+            <span class="badge ${stBadge[sel.status]}">${sel.status}</span>
+          </div>
+          <div class="grid grid-2 gap-3 mb-5">
+            <div class="p-3 rounded-lg" style="background:rgba(99,102,241,0.04)"><div class="text-xs uppercase tracking-wider mb-1" style="color:var(--text-muted)">Scheme</div><div class="font-semibold text-sm">${sel.scheme}</div></div>
+            <div class="p-3 rounded-lg" style="background:rgba(99,102,241,0.04)"><div class="text-xs uppercase tracking-wider mb-1" style="color:var(--text-muted)">Locked Amount</div><div class="font-semibold text-sm font-mono">${sel.amount}</div></div>
+          </div>
+          <div class="p-3 rounded-lg mb-5" style="background:rgba(99,102,241,0.04)">
+            <div class="text-xs uppercase tracking-wider mb-1" style="color:var(--text-muted)">TX</div>
+            <div class="font-mono text-xs break-all">${sel.txId}</div>
+          </div>
+          <div class="mb-5"><div class="text-xs uppercase tracking-wider mb-2" style="color:var(--text-muted)">Freeze Reason</div><p class="text-sm" style="color:var(--text-secondary)">${sel.reason}</p>
+            <div class="flex items-center gap-3 mt-3 text-xs" style="color:var(--text-muted)">
+              <span>Flag: <span class="font-mono font-semibold" style="color:var(--accent-danger)">${sel.flag}</span></span>
+              <span>·</span><span>By: <span class="font-mono">${sel.frozenBy}</span></span>
+              <span>·</span><span>Held <span style="color:var(--text-secondary)">${sel.daysLocked}d</span></span>
+            </div>
+          </div>
+          ${sel.status!=='Released'?`
+            <div class="flex gap-2">
+              <button class="btn-primary flex-1 justify-center text-sm" style="background:var(--accent-success)" onclick="releaseAsset('${sel.id}')">Release Funds</button>
+              <button class="btn-secondary flex-1 justify-center text-sm" onclick="extendAsset('${sel.id}')">Extend Hold (+7d)</button>
+            </div>
+          `:`<div class="flex items-center gap-2 p-3 rounded-lg text-sm" style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.2);color:var(--accent-success)">${P.icon('checkCircle')} Funds have been released.</div>`}
+        </div>
+      `;
+    }
+    render();
+
+    function releaseAsset(id) {
+      assets = assets.map(a => a.id===id?Object.assign({},a,{status:'Released'}):a); render();
+    }
+    window.releaseAsset = releaseAsset;
+    function extendAsset(id) {
+      assets = assets.map(a => a.id===id?Object.assign({},a,{daysLocked:a.daysLocked+7,status:'Under Review'}):a); render();
+    }
+    window.extendAsset = extendAsset;
+  </script>
+</body>
+</html>
